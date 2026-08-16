@@ -179,17 +179,13 @@ export function RecipeDetail() {
             className="btn btn-primary grow"
             onClick={() => {
               /*
-               * Первое нажатие — блюдо в списке дня как план. Второе — отметка
-               * «приготовили». Дубли не создаются.
+               * Повторное нажатие ничего не меняет — только сообщает. Раньше оно
+               * молча ставило «приготовили», и случайный двойной тап отправлял
+               * блюдо в историю сразу с галочкой.
                */
               const existing = entryForRecipeOn(db, today(), recipe.id)
               if (existing) {
-                if (existing.status === 'planned') {
-                  saveEntry({ id: existing.id, status: 'done' })
-                  toast('Отметили приготовленным')
-                } else {
-                  toast('Сегодня уже готовили')
-                }
+                toast(existing.status === 'planned' ? 'Уже в списке на сегодня' : 'Сегодня уже готовили')
                 return
               }
               const meal = guessMeal(recipe.category)

@@ -280,9 +280,11 @@ export function SettingsPage() {
                 <button
                   className="btn grow"
                   onClick={() => {
-                    void switchAccount().catch((error: unknown) =>
-                      toast(error instanceof Error ? error.message : 'Не удалось сменить аккаунт'),
-                    )
+                    void switchAccount()
+                      .then((email) => toast(email ? `Вошли как ${email}` : 'Аккаунт не изменился'))
+                      .catch((error: unknown) =>
+                        toast(error instanceof Error ? error.message : 'Не удалось сменить аккаунт'),
+                      )
                   }}
                 >
                   Сменить аккаунт

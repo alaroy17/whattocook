@@ -13,7 +13,7 @@ import {
   IconTag,
 } from '../components/Icons'
 import { USERS } from '../types'
-import { Avatar } from '../components/ui'
+import { Avatar, Confirm, toast } from '../components/ui'
 import { classNames, countOf } from '../lib/util'
 
 function MenuRow({
@@ -42,7 +42,8 @@ function MenuRow({
 export function More() {
   const navigate = useNavigate()
   const { db, me, setMe, sync, identityLocked } = useStore()
-  const [rebinding, setRebinding] = useState(false)
+  const [confirmSwap, setConfirmSwap] = useState(false)
+  const partner = USERS.find((user) => user.id !== me)
 
   const entries = alive(db.entries).filter((entry) => entry.status === 'done').length
   const products = alive(db.products).length
@@ -59,16 +60,33 @@ export function More() {
     <>
       <TopBar title="Ещё" showUser={false} />
       <main className="content">
+        {/*
+          Привязанный аккаунт: показываем, кто вы, без переключателей.
+          «Это не я» — единственный выход, с явным подтверждением: раньше здесь
+          была кнопка «Изменить», которая просто исчезала и ничего не объясняла.
+        */}
         <div className="card">
-          <div className="row-between">
+          {identityLocked ? (
+            <div className="row-between">
+              <div className="row" style={{ gap: 10 }}>
+                <Avatar id={me} large />
+                <div>
+                  <strong>{USERS.find((user) => user.id === me)?.name}</strong>
+                  {sync.email && <div className="small muted">{sync.email}</div>}
+                </div>
+              </div>
+              {partner && (
+                <button className="btn btn-sm" onClick={() => setConfirmSwap(true)}>
+                  Это не я
+                </button>
+              )}
+            </div>
+          ) : (
             <div className="row" style={{ gap: 8 }}>
               {USERS.map((user) => (
                 <button
                   key={user.id}
                   className={classNames('chip', 'chip-user', `chip-${user.id}`, me === user.id && 'active')}
-                  /* При привязанном аккаунте переключение перенесло бы почту на другого
-                     человека — поэтому по умолчанию заблокировано. */
-                  disabled={identityLocked && me !== user.id && !rebinding}
                   onClick={() => setMe(user.id)}
                 >
                   <Avatar id={user.id} />
@@ -76,12 +94,7 @@ export function More() {
                 </button>
               ))}
             </div>
-            {identityLocked && !rebinding && (
-              <button className="btn btn-sm btn-ghost" onClick={() => setRebinding(true)}>
-                Изменить
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         <div className="group-title">Кухня</div>
@@ -141,6 +154,24 @@ export function More() {
           Что готовим · данные лежат в вашем Google Drive
         </div>
       </main>
+
+      {confirmSwap && partner && (
+        <Confirm
+          title={`Вы — ${partner.name}?`}
+          text={
+            sync.email
+              ? `Аккаунт ${sync.email} будет закреплён за «${partner.name}». Заметки и оценки с этого устройства пойдут от его имени.`
+              : undefined
+          }
+          confirmLabel={`Да, я ${partner.name}`}
+          onCancel={() => setConfirmSwap(false)}
+          onConfirm={() => {
+            setMe(partner.id)
+            setConfirmSwap(false)
+            toast(`Теперь вы — ${partner.name}`)
+          }}
+        />
+      )}
     </>
   )
 }
