@@ -104,6 +104,8 @@ let tokenClientFor = ''
 let accessToken = ''
 let expiresAt = 0
 let pending: { resolve: (token: string) => void; reject: (error: Error) => void } | null = null
+/** Общий промис для параллельных запросов токена. */
+let inFlight: Promise<string> | null = null
 
 /** Восстанавливаем токен между перезагрузками страницы, чтобы не мигать окном согласия. */
 function restoreToken(): void {
@@ -167,20 +169,36 @@ async function ensureTokenClient(): Promise<TokenClient> {
 /**
  * Получение токена. interactive = false пробует тихое обновление: работает,
  * если пользователь уже дал согласие и залогинен в Google в этом браузере.
+ *
+ * Параллельные вызовы разделяют один запрос: раньше второй просто падал с ошибкой,
+ * хотя ему достаточно было дождаться результата первого.
  */
 export async function getAccessToken(interactive: boolean): Promise<string> {
   if (hasToken()) return accessToken
   const client = await ensureTokenClient()
-  if (pending) throw new DriveError('Запрос доступа уже выполняется', true)
-  return new Promise<string>((resolve, reject) => {
+  if (inFlight) return inFlight
+
+  inFlight = new Promise<string>((resolve, reject) => {
     pending = { resolve, reject }
     try {
-      client.requestAccessToken({ prompt: interactive ? 'consent' : '' })
+      /*
+       * prompt: '' — Google сам покажет экран согласия, если его ещё не давали.
+       * Форсировать 'consent' при каждом подключении незачем: это лишний экран
+       * для человека, который уже всё разрешил. Смену аккаунта делаем через
+       * select_account.
+       */
+      client.requestAccessToken({ prompt: interactive ? 'select_account' : '' })
     } catch (error) {
       pending = null
       reject(error instanceof Error ? error : new DriveError(String(error), true))
     }
   })
+
+  try {
+    return await inFlight
+  } finally {
+    inFlight = null
+  }
 }
 
 export function signOut(): void {
@@ -225,9 +243,18 @@ export interface DriveFileMeta {
   name: string
   modifiedTime: string
   version?: string
+  /** false — файл чужой, им с нами поделились. */
+  ownedByMe?: boolean
 }
 
-async function findByAppTag(kind: string, mimeType?: string): Promise<DriveFileMeta | null> {
+/** Базы нет ни своей, ни расшаренной — приложение должно спросить, что делать. */
+export class NoDatabaseError extends DriveError {
+  constructor() {
+    super('База не найдена')
+  }
+}
+
+async function findAllByAppTag(kind: string, mimeType?: string): Promise<DriveFileMeta[]> {
   const clauses = [
     `appProperties has { key='app' and value='${APP_TAG}' }`,
     `appProperties has { key='kind' and value='${kind}' }`,
@@ -236,14 +263,39 @@ async function findByAppTag(kind: string, mimeType?: string): Promise<DriveFileM
   if (mimeType) clauses.push(`mimeType='${mimeType}'`)
   const query = encodeURIComponent(clauses.join(' and '))
   const response = await api(
-    `/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,version)&orderBy=modifiedTime desc&pageSize=10`,
+    `/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,version,ownedByMe)&orderBy=modifiedTime desc&pageSize=20`,
   )
   const data = (await response.json()) as { files?: DriveFileMeta[] }
-  return data.files?.[0] ?? null
+  return data.files ?? []
+}
+
+async function findByAppTag(kind: string, mimeType?: string): Promise<DriveFileMeta | null> {
+  const found = await findAllByAppTag(kind, mimeType)
+  // Общий файл важнее своего: если с нами поделились базой, работать надо с ней.
+  return found.find((file) => file.ownedByMe === false) ?? found[0] ?? null
+}
+
+/** Файлы приложения, которыми с нами поделились (лежат в «Доступные мне»). */
+async function findShared(kind: string, mimeType?: string): Promise<DriveFileMeta[]> {
+  const clauses = [
+    `appProperties has { key='app' and value='${APP_TAG}' }`,
+    `appProperties has { key='kind' and value='${kind}' }`,
+    'sharedWithMe',
+    'trashed=false',
+  ]
+  if (mimeType) clauses.push(`mimeType='${mimeType}'`)
+  const query = encodeURIComponent(clauses.join(' and '))
+  const response = await api(
+    `/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,version,ownedByMe)&pageSize=20`,
+  )
+  const data = (await response.json()) as { files?: DriveFileMeta[] }
+  return data.files ?? []
 }
 
 export async function getFileMeta(fileId: string): Promise<DriveFileMeta> {
-  const response = await api(`/drive/v3/files/${fileId}?fields=id,name,modifiedTime,version`)
+  const response = await api(
+    `/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,modifiedTime,version`,
+  )
   return (await response.json()) as DriveFileMeta
 }
 
@@ -276,8 +328,15 @@ export async function resolveAppFolder(): Promise<string> {
   return id
 }
 
-/** Находит существующий файл базы или создаёт новый внутри папки приложения. */
-export async function resolveDbFile(initialContent: string): Promise<DriveFileMeta> {
+/**
+ * Находит файл базы: свой или тот, которым с нами поделились.
+ *
+ * Молча создавать новый нельзя: если второй человек подключится раньше, чем примет
+ * приглашение, у него появится собственная база — и две половины истории никогда
+ * не сойдутся. Поэтому при отсутствии файла бросаем NoDatabaseError, а решение
+ * (создать свою или подождать доступ) принимает пользователь.
+ */
+export async function resolveDbFile(): Promise<DriveFileMeta> {
   const saved = getSavedFileId()
   if (saved) {
     try {
@@ -286,11 +345,19 @@ export async function resolveDbFile(initialContent: string): Promise<DriveFileMe
       forgetFile()
     }
   }
-  const found = (await findByAppTag('db')) ?? (await findByName(DB_FILE_NAME))
+  const found =
+    (await findByAppTag('db')) ??
+    (await findShared('db'))[0] ??
+    (await findByName(DB_FILE_NAME))
   if (found) {
     setSavedFileId(found.id)
     return found
   }
+  throw new NoDatabaseError()
+}
+
+/** Явное создание базы — вызывается только после подтверждения пользователем. */
+export async function createDbFile(initialContent: string): Promise<DriveFileMeta> {
   const created = await createJsonFile(DB_FILE_NAME, initialContent, await resolveAppFolder())
   setSavedFileId(created.id)
   return created
@@ -342,7 +409,7 @@ async function createJsonFile(name: string, content: string, parent: string): Pr
 }
 
 export async function downloadJson(fileId: string): Promise<unknown> {
-  const response = await api(`/drive/v3/files/${fileId}?alt=media`)
+  const response = await api(`/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`)
   const text = await response.text()
   if (!text.trim()) return null
   return JSON.parse(text)
@@ -350,7 +417,7 @@ export async function downloadJson(fileId: string): Promise<unknown> {
 
 export async function uploadJson(fileId: string, content: string): Promise<DriveFileMeta> {
   const response = await api(
-    `/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,modifiedTime,version`,
+    `/upload/drive/v3/files/${encodeURIComponent(fileId)}?uploadType=media&fields=id,name,modifiedTime,version`,
     { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: content },
   )
   return (await response.json()) as DriveFileMeta
@@ -382,12 +449,12 @@ export async function uploadPhoto(blob: Blob, name: string): Promise<string> {
 }
 
 export async function downloadPhoto(fileId: string): Promise<Blob> {
-  const response = await api(`/drive/v3/files/${fileId}?alt=media`)
+  const response = await api(`/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`)
   return response.blob()
 }
 
 export async function deleteFile(fileId: string): Promise<void> {
-  await api(`/drive/v3/files/${fileId}`, { method: 'DELETE' })
+  await api(`/drive/v3/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' })
 }
 
 /** Подпапка с автоматическими копиями базы. */
@@ -475,17 +542,20 @@ export async function shareWith(email: string): Promise<void> {
     if (!parents.includes(folder)) targets.add(dbId)
   }
   for (const fileId of targets) {
-    await api(`/drive/v3/files/${fileId}/permissions?sendNotificationEmail=true`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email.trim() }),
-    })
+    await api(
+      `/drive/v3/files/${encodeURIComponent(fileId)}/permissions?sendNotificationEmail=true`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email.trim() }),
+      },
+    )
   }
 }
 
 async function getParents(fileId: string): Promise<string[]> {
   try {
-    const response = await api(`/drive/v3/files/${fileId}?fields=parents`)
+    const response = await api(`/drive/v3/files/${encodeURIComponent(fileId)}?fields=parents`)
     const data = (await response.json()) as { parents?: string[] }
     return data.parents ?? []
   } catch {

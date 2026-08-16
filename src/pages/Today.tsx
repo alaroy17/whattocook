@@ -4,13 +4,20 @@ import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
 import { formatDate, formatRelativeDay, today } from '../lib/date'
-import { pickRandom, regularRecipes, scoreRecipes, type SuggestFilters, type Suggestion } from '../lib/suggest'
+import {
+  guessMeal,
+  pickRandom,
+  regularRecipes,
+  scoreRecipes,
+  type SuggestFilters,
+  type Suggestion,
+} from '../lib/suggest'
 import { RecipeRow, Thumb } from '../components/RecipeRow'
 import { Avatar, Chips, Empty, Segmented, toast } from '../components/ui'
 import { EntryEditor } from '../components/EntryEditor'
 import { RecipeEditor } from '../components/RecipeEditor'
 import { IconCheck, IconDice, IconFridge, IconPlus, IconRefresh, IconRepeat } from '../components/Icons'
-import { MEAL_SLOTS, type MealSlot } from '../types'
+import { MEAL_SLOTS } from '../types'
 import { daysWord } from '../lib/util'
 import { categoriesWithRecipes } from '../lib/categories'
 import { fridgeNeedsReview, fridgeStaleDays } from '../lib/fridge'
@@ -65,9 +72,13 @@ export function Today() {
   const nameOf = (entryRecipeId: string | undefined, title: string | undefined) =>
     (entryRecipeId ? db.recipes[entryRecipeId]?.name : title) ?? 'Без названия'
 
-  const markCooked = (recipeId: string, meal: MealSlot = 'dinner') => {
-    saveEntry({ date, meal, status: 'done', recipeId })
-    toast('Записали в историю')
+  const markCooked = (recipeId: string) => {
+    const meal = guessMeal(db.recipes[recipeId]?.category)
+    const saved = saveEntry({ date, meal, status: 'done', recipeId })
+    toast(`Записали в «${MEAL_SLOTS.find((slot) => slot.id === meal)?.name}»`, {
+      label: 'Изменить',
+      onClick: () => setEditingEntry(saved.id),
+    })
   }
 
   // «Не готовили N дней» и так написано рядом с датой — в бейджах это лишний повтор.

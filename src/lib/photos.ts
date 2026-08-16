@@ -49,11 +49,25 @@ async function writeCache(photoId: string, blob: Blob): Promise<void> {
   }
 }
 
-export async function uploadRecipePhoto(file: File): Promise<string> {
+export async function uploadRecipePhoto(file: File, replacing?: string): Promise<string> {
   const blob = await compressImage(file)
   const photoId = await drive.uploadPhoto(blob, `photo-${Date.now()}.jpg`)
   await writeCache(photoId, blob)
+  // Старый снимок иначе остался бы на Диске навсегда.
+  if (replacing && replacing !== photoId) await discardPhoto(replacing)
   return photoId
+}
+
+/** Удаляет фотографию с Диска и из кэша. Ошибки игнорируем: файла могло уже не быть. */
+export async function discardPhoto(photoId: string): Promise<void> {
+  await drive.deleteFile(photoId).catch(() => {})
+  if (!('caches' in window)) return
+  try {
+    const cache = await caches.open(CACHE_NAME)
+    await cache.delete(cacheKey(photoId))
+  } catch {
+    /* кэш не критичен */
+  }
 }
 
 /** Отдаёт ссылку на фото: сначала из кэша (работает офлайн), затем из Drive. */

@@ -3,6 +3,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useStore } from './lib/store'
 import { ToastHost } from './components/ui'
 import { IdentityPrompt } from './components/IdentityPrompt'
+import { NoDatabasePrompt } from './components/NoDatabasePrompt'
 import { applyUpdate, onUpdateReady } from './lib/updates'
 import { IconCalendar, IconFridge, IconHome, IconList, IconMore } from './components/Icons'
 import { Today } from './pages/Today'
@@ -29,7 +30,7 @@ const TABS = [
 ]
 
 export function App() {
-  const { db, needsIdentity } = useStore()
+  const { db, needsIdentity, sync } = useStore()
   const fridgeAlert = fridgeNeedsReview(db)
   const [updateReady, setUpdateReady] = useState(false)
 
@@ -92,7 +93,7 @@ export function App() {
         </div>
       )}
 
-      {needsIdentity && <IdentityPrompt />}
+      {sync.status === 'no-database' ? <NoDatabasePrompt /> : needsIdentity && <IdentityPrompt />}
 
       <ToastHost />
     </div>

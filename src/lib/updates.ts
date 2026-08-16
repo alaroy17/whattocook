@@ -36,9 +36,15 @@ export function applyUpdate(): void {
 export function registerServiceWorker(url: string): void {
   if (!('serviceWorker' in navigator)) return
 
+  /*
+   * При самой первой установке воркер тоже берёт управление (clients.claim),
+   * и без этой проверки страница перезагружалась бы прямо посреди первого визита.
+   * Перезагрузка нужна только когда контроллер сменился, то есть при обновлении.
+   */
+  const hadController = Boolean(navigator.serviceWorker.controller)
+
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // Новый воркер взял управление — перезагружаемся один раз, чтобы код и кэш совпали.
-    if (reloading) return
+    if (reloading || !hadController) return
     reloading = true
     window.location.reload()
   })

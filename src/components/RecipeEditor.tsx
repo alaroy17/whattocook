@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { UNITS, type Chef, type Recipe, type RecipeIngredient } from '../types'
 import { categoryOptions } from '../lib/categories'
+import { safeUrl } from '../lib/util'
 import { useStore } from '../lib/store'
 import { Field, Sheet, UserPicker, toast } from './ui'
 import { IconPhoto, IconPlus, IconTrash } from './Icons'
-import { uploadRecipePhoto } from '../lib/photos'
+import { discardPhoto, uploadRecipePhoto } from '../lib/photos'
 import { Thumb } from './RecipeRow'
 import * as drive from '../lib/drive'
 
@@ -63,7 +64,7 @@ export function RecipeEditor({
     }
     setUploading(true)
     try {
-      setPhotoId(await uploadRecipePhoto(file))
+      setPhotoId(await uploadRecipePhoto(file, photoId))
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Не удалось загрузить фото')
     } finally {
@@ -92,7 +93,7 @@ export function RecipeEditor({
       chef,
       favorite: recipe?.favorite ?? false,
       ratings: recipe?.ratings ?? {},
-      sourceUrl: sourceUrl.trim() || undefined,
+      sourceUrl: safeUrl(sourceUrl) ?? undefined,
       photoId,
       archived: recipe?.archived,
       regular,
@@ -268,7 +269,13 @@ export function RecipeEditor({
               />
             </label>
             {photoId && (
-              <button className="btn btn-sm btn-ghost" onClick={() => setPhotoId(undefined)}>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  void discardPhoto(photoId)
+                  setPhotoId(undefined)
+                }}
+              >
                 Убрать
               </button>
             )}

@@ -5,3 +5,5 @@ public/icons/
 *.local
 .env
 .vite/
+.check/
+AUDIT.md

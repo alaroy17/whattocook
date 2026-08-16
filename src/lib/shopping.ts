@@ -103,16 +103,25 @@ export function groupShoppingList(items: ShoppingItem[]): { group: string; items
 
 const CHECKED_KEY = 'wtc.shopping.checked'
 
-export function loadChecked(): Set<string> {
+/**
+ * Вычеркнутые продукты привязаны к неделе: без этого купленный на этой неделе сыр
+ * оказывался бы уже вычеркнутым в списке на следующую.
+ */
+export function loadChecked(weekStart: string): Set<string> {
   try {
-    return new Set(JSON.parse(localStorage.getItem(CHECKED_KEY) ?? '[]') as string[])
+    const raw = JSON.parse(localStorage.getItem(CHECKED_KEY) ?? 'null') as {
+      weekStart?: string
+      keys?: string[]
+    } | null
+    if (!raw || raw.weekStart !== weekStart) return new Set()
+    return new Set(raw.keys ?? [])
   } catch {
     return new Set()
   }
 }
 
-export function saveChecked(checked: Set<string>): void {
-  localStorage.setItem(CHECKED_KEY, JSON.stringify([...checked]))
+export function saveChecked(weekStart: string, checked: Set<string>): void {
+  localStorage.setItem(CHECKED_KEY, JSON.stringify({ weekStart, keys: [...checked] }))
 }
 
 /** Текст для отправки в мессенджер — «скинь мне список». */

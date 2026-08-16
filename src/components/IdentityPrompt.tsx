@@ -7,7 +7,7 @@ import { USERS } from '../types'
  * по почте само — и на его телефоне, и на любом другом устройстве с тем же аккаунтом.
  */
 export function IdentityPrompt() {
-  const { sync, setMe } = useStore()
+  const { sync, setMe, disconnect } = useStore()
 
   return (
     <Sheet title="Кто вы?" onClose={() => undefined} dismissible={false}>
@@ -28,8 +28,12 @@ export function IdentityPrompt() {
           </button>
         ))}
       </div>
-      <div className="small muted" style={{ marginTop: 12 }}>
-        Ошиблись — поменять можно в разделе «Ещё».
+      {/* Без этой кнопки вход не тем аккаунтом превращается в тупик: окно перекрывает всё. */}
+      <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={disconnect}>
+        Это не мой аккаунт — отключить
+      </button>
+      <div className="small muted" style={{ marginTop: 8, textAlign: 'center' }}>
+        Ошиблись именем — поменять можно в разделе «Ещё»
       </div>
     </Sheet>
   )

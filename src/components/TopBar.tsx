@@ -12,6 +12,7 @@ const SYNC_TEXT: Record<string, string> = {
   idle: 'Синхронизировано',
   syncing: 'Синхронизация…',
   error: 'Ошибка синхронизации',
+  'no-database': 'База на Диске не найдена',
 }
 
 export function TopBar({

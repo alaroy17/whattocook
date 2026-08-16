@@ -17,7 +17,7 @@ import * as drive from './drive'
 import { ensureDailySnapshot } from './snapshots'
 import { nowIso, uid } from './util'
 
-export type SyncStatus = 'unconfigured' | 'offline' | 'idle' | 'syncing' | 'error'
+export type SyncStatus = 'unconfigured' | 'offline' | 'idle' | 'syncing' | 'error' | 'no-database'
 
 export type Collection = 'recipes' | 'entries' | 'products' | 'comments'
 
@@ -41,6 +41,8 @@ interface StoreValue {
   connect: () => Promise<void>
   disconnect: () => void
   syncNow: () => Promise<void>
+  /** Создать базу на своём Диске — когда общей нет и её никто не откроет. */
+  createDatabase: () => Promise<void>
   saveRecipe: (recipe: Partial<Recipe> & { id?: string }) => Recipe
   saveEntry: (entry: Partial<Entry> & { id?: string }) => Entry
   saveProduct: (product: Partial<Product> & { id?: string }) => Product
@@ -120,15 +122,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSync((s) => ({ ...s, status: 'syncing', message: '' }))
       try {
         await drive.getAccessToken(interactive)
-        const file = await drive.resolveDbFile(serialize(pruneTombstones(dbRef.current)))
-        const remoteRaw = await drive.downloadJson(file.id)
-        const remote = normalizeDatabase(remoteRaw)
+        const file = await drive.resolveDbFile()
 
-        // Локальную версию берём заново: пока шёл запрос, пользователь мог что-то поменять.
-        const merged = pruneTombstones(mergeDatabases(dbRef.current, remote))
-        const mergedText = serialize(merged)
-        if (mergedText !== serialize(remote)) {
+        /*
+         * Скачиваем, сливаем, отправляем. Перед отправкой проверяем, не записал ли
+         * файл кто-то ещё (поле version растёт при каждой записи): если записал —
+         * начинаем заново, иначе его правки были бы затёрты нашей версией.
+         */
+        let merged = pruneTombstones(dbRef.current)
+        let baseline = file.version
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const remote = normalizeDatabase(await drive.downloadJson(file.id))
+          // Локальную версию берём заново: пока шёл запрос, пользователь мог что-то поменять.
+          merged = pruneTombstones(mergeDatabases(dbRef.current, remote))
+          const mergedText = serialize(merged)
+          if (mergedText === serialize(remote)) break
+
+          const current = await drive.getFileMeta(file.id)
+          if (current.version !== baseline) {
+            baseline = current.version
+            continue
+          }
           await drive.uploadJson(file.id, mergedText)
+          break
         }
 
         // И ещё раз: правка могла прийти уже во время загрузки — тогда доотправим следующим заходом.
@@ -145,6 +161,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         setSync({ status: 'idle', message: '', lastSyncAt: at, email })
       } catch (error) {
+        // Базы нет ни своей, ни общей — спрашиваем пользователя, а не создаём вторую молча.
+        if (error instanceof drive.NoDatabaseError) {
+          const email = await drive.fetchUserInfo().then((info) => info.email).catch(() => null)
+          setSync((s) => ({ ...s, status: 'no-database', message: '', email: email ?? s.email }))
+          return
+        }
         const message = error instanceof Error ? error.message : String(error)
         const needsLogin = error instanceof drive.DriveError && error.needsInteraction
         setSync((s) => ({
@@ -165,7 +187,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const schedulePush = useCallback(() => {
     if (pushTimer.current) clearTimeout(pushTimer.current)
     pushTimer.current = setTimeout(() => {
-      if (drive.getClientId() && drive.hasToken()) void runSyncRef.current(false)
+      // Наличие токена не проверяем: он живёт час, а приложение на телефоне —
+      // сутками. runSync сам тихо обновит токен, а если не выйдет — уйдёт в offline.
+      if (drive.getClientId()) void runSyncRef.current(false)
     }, 2500)
   }, [])
   schedulePushRef.current = schedulePush
@@ -175,7 +199,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!drive.getClientId()) return
     void runSyncRef.current(false)
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && drive.hasToken()) void runSyncRef.current(false)
+      if (document.visibilityState === 'visible') void runSyncRef.current(false)
     }
     document.addEventListener('visibilitychange', onVisible)
     const timer = setInterval(onVisible, 90_000)
@@ -228,6 +252,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setSync((s) => ({ ...s, status: 'offline', email: null, message: '' }))
       },
       syncNow: () => runSyncRef.current(false),
+      createDatabase: async () => {
+        await drive.createDbFile(serialize(pruneTombstones(dbRef.current)))
+        await runSyncRef.current(false)
+      },
       saveRecipe: (patch) => {
         const id = patch.id ?? uid('r')
         let saved!: Recipe
@@ -289,6 +317,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               if (item.deletedAt) delete target[id]
             }
           }
+          // Отметка нужна, чтобы слияние не вернуло стёртое с другого устройства.
+          draft.settings = { ...draft.settings, purgedAt: nowIso() }
+          draft.settingsUpdatedAt = nowIso()
         })
       },
       updateSettings: (patch) => {

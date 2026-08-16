@@ -1,4 +1,4 @@
-import type { Chef, Database, Recipe } from '../types'
+import type { Chef, Database, MealSlot, Recipe } from '../types'
 import { alive } from './db'
 import { diffDays, today, type IsoDate } from './date'
 import { buildProductIndex, stockRatio } from './cost'
@@ -170,6 +170,21 @@ export function pickRandom(suggestions: Suggestion[], fair = false): Suggestion 
     if (ticket <= 0) return top[i]
   }
   return top[top.length - 1]
+}
+
+/**
+ * Куда записать блюдо, если приём пищи не выбирали явно.
+ * Сначала смотрим на раздел, потом на время суток — иначе сырники,
+ * записанные утром одной кнопкой, попадали бы в «Ужин».
+ */
+export function guessMeal(category: string | undefined, at: Date = new Date()): MealSlot {
+  if (category === 'Завтрак') return 'breakfast'
+  if (category === 'Суп') return 'lunch'
+  if (category === 'Десерт' || category === 'Выпечка' || category === 'Закуска') return 'snack'
+  const hour = at.getHours()
+  if (hour < 11) return 'breakfast'
+  if (hour < 16) return 'lunch'
+  return 'dinner'
 }
 
 export interface RegularItem {

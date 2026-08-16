@@ -21,6 +21,23 @@ export function classNames(...parts: (string | false | null | undefined)[]): str
   return parts.filter(Boolean).join(' ')
 }
 
+/**
+ * Ссылка, по которой безопасно перейти. База может приехать импортом файла,
+ * а `javascript:` в href выполнил бы чужой код на нашей странице — со всеми правами
+ * приложения на Google Drive.
+ */
+export function safeUrl(value: string | undefined | null): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  try {
+    const url = new URL(trimmed)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null
+  } catch {
+    // Без схемы считаем, что это домен, и достраиваем https.
+    return /^[\w.-]+\.[a-z]{2,}(\/|$)/i.test(trimmed) ? `https://${trimmed}` : null
+  }
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }

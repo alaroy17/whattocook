@@ -8,9 +8,9 @@ import { Avatar, Confirm, Empty, Stars, toast } from '../components/ui'
 import { RecipeEditor } from '../components/RecipeEditor'
 import { EntryEditor } from '../components/EntryEditor'
 import { buildProductIndex, ingredientCost, recipeCost } from '../lib/cost'
-import { buildHistory, daysSince } from '../lib/suggest'
+import { buildHistory, daysSince, guessMeal } from '../lib/suggest'
 import { formatDate, today } from '../lib/date'
-import { daysWord, formatMoney, formatQty, normalizeName, timesWord } from '../lib/util'
+import { daysWord, formatMoney, formatQty, normalizeName, safeUrl, timesWord } from '../lib/util'
 import { IconCheck, IconEdit, IconHeart, IconPhoto, IconTrash, IconUsers } from '../components/Icons'
 import { MEAL_SLOTS, USERS, userName, type Recipe } from '../types'
 import { uploadRecipePhoto } from '../lib/photos'
@@ -29,7 +29,7 @@ function RecipePhoto({ recipe }: { recipe: Recipe }) {
     }
     setUploading(true)
     try {
-      saveRecipe({ id: recipe.id, photoId: await uploadRecipePhoto(file) })
+      saveRecipe({ id: recipe.id, photoId: await uploadRecipePhoto(file, recipe.photoId) })
       toast('Фото добавлено')
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Не удалось загрузить фото')
@@ -162,8 +162,9 @@ export function RecipeDetail() {
           <button
             className="btn btn-primary grow"
             onClick={() => {
-              saveEntry({ date: today(), meal: 'dinner', status: 'done', recipeId: recipe.id })
-              toast('Записали в историю')
+              const meal = guessMeal(recipe.category)
+              saveEntry({ date: today(), meal, status: 'done', recipeId: recipe.id })
+              toast(`Записали в «${MEAL_SLOTS.find((slot) => slot.id === meal)?.name}»`)
             }}
           >
             <IconCheck size={16} /> Готовим сегодня
@@ -245,9 +246,14 @@ export function RecipeDetail() {
           </section>
         )}
 
-        {recipe.sourceUrl && (
+        {safeUrl(recipe.sourceUrl) && (
           <section className="section">
-            <a className="btn btn-block" href={recipe.sourceUrl} target="_blank" rel="noreferrer">
+            <a
+              className="btn btn-block"
+              href={safeUrl(recipe.sourceUrl)!}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
               Открыть исходный рецепт
             </a>
           </section>

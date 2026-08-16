@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
@@ -27,7 +27,7 @@ export function Plan() {
   const [picking, setPicking] = useState<string | null>(null)
   const [pickMeal, setPickMeal] = useState<MealSlot>('dinner')
   const [editing, setEditing] = useState<Entry | null>(null)
-  const [checked, setChecked] = useState<Set<string>>(() => loadChecked())
+  const [checked, setChecked] = useState<Set<string>>(() => loadChecked(startOfWeek(today())))
   const [hideInStock, setHideInStock] = useState(true)
 
   const days = useMemo(() => dateRange(weekStart, addDays(weekStart, 6)), [weekStart])
@@ -77,12 +77,17 @@ export function Plan() {
     0,
   )
 
+  // При переходе на другую неделю показываем её собственные отметки.
+  useEffect(() => {
+    setChecked(loadChecked(weekStart))
+  }, [weekStart])
+
   const toggle = (key: string) => {
     setChecked((previous) => {
       const next = new Set(previous)
       if (next.has(key)) next.delete(key)
       else next.add(key)
-      saveChecked(next)
+      saveChecked(weekStart, next)
       return next
     })
   }
@@ -287,7 +292,7 @@ export function Plan() {
                     className="btn"
                     onClick={() => {
                       setChecked(new Set())
-                      saveChecked(new Set())
+                      saveChecked(weekStart, new Set())
                     }}
                   >
                     Сбросить

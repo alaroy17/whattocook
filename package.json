@@ -9,7 +9,8 @@
     "dev": "vite",
     "build": "npm run icons && tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:merge": "esbuild src/lib/db.ts --bundle --format=esm --outfile=.check/db.mjs --log-level=error && node scripts/check-merge.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",

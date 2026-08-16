@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
@@ -42,11 +43,15 @@ function MenuRow({
 export function More() {
   const navigate = useNavigate()
   const { db, me, setMe, sync, identityLocked } = useStore()
+  const [rebinding, setRebinding] = useState(false)
 
   const recipes = alive(db.recipes).length
   const entries = alive(db.entries).filter((entry) => entry.status === 'done').length
   const products = alive(db.products).length
-  const accountsBound = Object.values(db.settings.userEmails ?? {}).filter(Boolean).length
+  // Второй привязанный человек — именно второй, а не всегда «Саша».
+  const partnerName = USERS.find(
+    (user) => user.id !== me && Boolean(db.settings.userEmails?.[user.id]),
+  )?.name
   const trashed = [db.recipes, db.entries, db.products, db.comments].reduce(
     (sum, collection) => sum + Object.values(collection).filter((item) => item.deletedAt).length,
     0,
@@ -63,6 +68,9 @@ export function More() {
               <button
                 key={user.id}
                 className={classNames('chip', 'chip-user', `chip-${user.id}`, me === user.id && 'active')}
+                /* При привязанном аккаунте переключение перенесло бы почту на другого
+                   человека — поэтому требуем подтверждение. */
+                disabled={identityLocked && me !== user.id && !rebinding}
                 onClick={() => setMe(user.id)}
               >
                 <Avatar id={user.id} />
@@ -75,6 +83,15 @@ export function More() {
               ? `Аккаунт ${sync.email} закреплён за этим человеком — на другом устройстве с тем же входом вас узнают автоматически`
               : 'От этого зависит, чьи заметки и оценки вы оставляете'}
           </div>
+          {identityLocked && !rebinding && (
+            <button
+              className="btn btn-sm btn-ghost"
+              style={{ marginTop: 4, paddingLeft: 0 }}
+              onClick={() => setRebinding(true)}
+            >
+              Это не тот человек — перепривязать
+            </button>
+          )}
         </div>
 
         <div className="group-title">Кухня</div>
@@ -108,7 +125,7 @@ export function More() {
               sync.status === 'unconfigured'
                 ? 'не подключён'
                 : sync.email
-                  ? `${sync.email}${accountsBound > 1 ? ' · и Саша' : ''}`
+                  ? `${sync.email}${partnerName ? ` · и ${partnerName}` : ''}`
                   : 'подключение не завершено'
             }
             onClick={() => navigate('/more/settings')}

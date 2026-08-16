@@ -57,9 +57,9 @@ export function History() {
         ) : (
           <>
             <div className="small muted" style={{ marginBottom: 12, lineHeight: 1.6 }}>
-              Раз в сутки приложение само сохраняет копию базы на Диск. Восстановление вернёт всё,
-              что было в выбранной копии, — включая удалённое после неё. Записи, появившиеся позже,
-              останутся на месте: ничего не потеряется.
+              Раз в сутки приложение само сохраняет копию базы на Диск. Восстановление вернёт то,
+              что после выбранной даты удалили или потеряли. Всё, что появилось или менялось
+              позже, остаётся нетронутым — свежие правки не откатываются.
             </div>
 
             {error && (
@@ -108,15 +108,15 @@ export function History() {
       {restoring && (
         <Confirm
           title={`Восстановить копию от ${formatDate(restoring.date)}?`}
-          text={`В копии ${restoring.recipes} блюд и ${restoring.entries} записей. Всё это вернётся, в том числе удалённое после этой даты. То, что появилось позже, останется.`}
+          text={`В копии ${restoring.recipes} блюд и ${restoring.entries} записей. Вернётся то, что после этой даты удалили или потеряли. Записи, изменённые позже, останутся в свежем виде — правки не откатятся.`}
           confirmLabel={busy ? 'Восстанавливаем…' : 'Восстановить'}
           onCancel={() => setRestoring(null)}
           onConfirm={() => {
             setBusy(true)
             void restoreSnapshot(restoring.id, db)
-              .then((restored) => {
+              .then(({ db: restored, restored: count }) => {
                 replaceDatabase(restored)
-                toast('Копия восстановлена')
+                toast(count === 0 ? 'Всё на месте, возвращать нечего' : `Вернулось записей: ${count}`)
                 setRestoring(null)
               })
               .catch((problem: unknown) =>

@@ -1,4 +1,11 @@
-import { emptyDatabase, DEFAULT_SETTINGS, type Database, type Syncable } from '../types'
+import {
+  emptyDatabase,
+  DEFAULT_SETTINGS,
+  TOMBSTONE_DAYS,
+  type Database,
+  type Syncable,
+  type UserId,
+} from '../types'
 
 const LOCAL_KEY = 'wtc.db.v1'
 
@@ -50,7 +57,37 @@ export function mergeDatabases(a: Database, b: Database): Database {
   const settingsFromB = b.settingsUpdatedAt > a.settingsUpdatedAt
   result.settings = { ...DEFAULT_SETTINGS, ...(settingsFromB ? b.settings : a.settings) }
   result.settingsUpdatedAt = settingsFromB ? b.settingsUpdatedAt : a.settingsUpdatedAt
+
+  /*
+   * Настройки в целом берём по свежести, но три поля так терять нельзя:
+   * их правят с разных устройств независимо, и «победа» одной версии целиком
+   * откатила бы чужую привязку аккаунта или выданный доступ.
+   */
+  result.settings.userEmails = mergeUserEmails(a.settings.userEmails, b.settings.userEmails)
+  result.settings.sharedWith = [
+    ...new Set([...(a.settings.sharedWith ?? []), ...(b.settings.sharedWith ?? [])]),
+  ]
+  result.settings.purgedAt = maxIso(a.settings.purgedAt, b.settings.purgedAt)
+
   return result
+}
+
+/** У каждого пользователя берём последнюю известную непустую почту. */
+function mergeUserEmails(
+  a: Partial<Record<UserId, string>> = {},
+  b: Partial<Record<UserId, string>> = {},
+): Partial<Record<UserId, string>> {
+  const result: Partial<Record<UserId, string>> = { ...a }
+  for (const [id, email] of Object.entries(b) as [UserId, string | undefined][]) {
+    if (email) result[id] = email
+  }
+  return result
+}
+
+function maxIso(a: string | null | undefined, b: string | null | undefined): string | null {
+  if (!a) return b ?? null
+  if (!b) return a
+  return a > b ? a : b
 }
 
 /** Живые (не удалённые) записи коллекции. */
@@ -59,18 +96,26 @@ export function alive<T extends Syncable>(collection: Record<string, T>): T[] {
 }
 
 /**
- * Убирает надгробия старше указанного срока, чтобы файл не рос вечно.
+ * Убирает надгробия: старше срока хранения либо попавшие под ручную очистку корзины.
+ *
+ * Очистка помечается временем в `settings.purgedAt`. Без такой отметки удалённые записи
+ * возвращались бы при следующем слиянии — у второго устройства они ещё есть, и оно
+ * считало бы их «отсутствующими локально», а не «стёртыми намеренно».
+ *
  * Возвращает новый объект: базу нельзя менять на месте, на неё смотрит React.
  */
-export function pruneTombstones(db: Database, olderThanDays = 120): Database {
-  const cutoff = new Date(Date.now() - olderThanDays * 86400000).toISOString()
+export function pruneTombstones(db: Database, olderThanDays = TOMBSTONE_DAYS): Database {
+  const expired = new Date(Date.now() - olderThanDays * 86400000).toISOString()
+  const purged = db.settings.purgedAt
   const result: Database = { ...db }
   for (const name of COLLECTIONS) {
     const source = db[name] as Record<string, Syncable>
     const kept: Record<string, Syncable> = {}
     let removed = 0
     for (const [id, item] of Object.entries(source)) {
-      if (item.deletedAt && item.deletedAt < cutoff) removed++
+      const drop =
+        item.deletedAt && (item.deletedAt < expired || (purged != null && item.deletedAt <= purged))
+      if (drop) removed++
       else kept[id] = item
     }
     if (removed > 0) (result[name] as Record<string, Syncable>) = kept

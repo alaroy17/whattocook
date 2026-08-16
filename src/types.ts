@@ -189,7 +189,15 @@ export interface Settings {
   userEmails: Partial<Record<UserId, string>>
   /** Кому уже открыли доступ к папке на Диске — чтобы не гадать, ушло приглашение или нет. */
   sharedWith: string[]
+  /**
+   * Момент последней очистки корзины. Всё, что удалили до него, стирается
+   * окончательно — и на втором устройстве тоже.
+   */
+  purgedAt: string | null
 }
+
+/** Сколько дней удалённое лежит в корзине, прежде чем исчезнуть навсегда. */
+export const TOMBSTONE_DAYS = 120
 
 export const DEFAULT_SETTINGS: Settings = {
   cooldownDays: 10,
@@ -201,6 +209,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fridgeReviewedAt: null,
   userEmails: {},
   sharedWith: [],
+  purgedAt: null,
 }
 
 export interface Database {

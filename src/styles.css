@@ -310,8 +310,7 @@ button {
 /* В тёмной теме акцент светлый — белый текст на нём читается плохо. */
 :root[data-theme='dark'] .btn-primary,
 :root[data-theme='dark'] .fab,
-:root[data-theme='dark'] .week-day.is-today .week-date,
-:root[data-theme='dark'] .cal-chip { color: #1d1a16; }
+:root[data-theme='dark'] .week-day.is-today .week-date { color: #1d1a16; }
 
 :root[data-theme='dark'] .week-day.is-today .week-date .wd { color: rgba(29, 26, 22, 0.65); }
 

@@ -247,7 +247,9 @@ export function SettingsPage() {
                       {user.name}
                       <div className="small muted ellipsis">{bound ?? 'аккаунт ещё не привязан'}</div>
                     </span>
-                    {bound && bound === sync.email && <span className="badge badge-accent">это вы</span>}
+                    {bound && bound.toLowerCase() === sync.email?.toLowerCase() && (
+                      <span className="badge badge-accent">это вы</span>
+                    )}
                   </div>
                 )
               })}
@@ -474,6 +476,16 @@ export function SettingsPage() {
           confirmLabel="Очистить"
           onCancel={() => setConfirmReset(false)}
           onConfirm={() => {
+            /*
+             * Чистим все локальные ключи приложения, кроме подключения к Google:
+             * иначе оставались бы вычеркнутые продукты, дата последнего снимка
+             * и прочие следы, из-за которых после «очистки» поведение было странным.
+             */
+            for (const key of Object.keys(localStorage)) {
+              if (key.startsWith('wtc.') && !key.startsWith('wtc.google.')) {
+                localStorage.removeItem(key)
+              }
+            }
             replaceDatabase(emptyDatabase())
             setConfirmReset(false)
             toast('Локальные данные очищены')
