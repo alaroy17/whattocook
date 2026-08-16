@@ -6,11 +6,42 @@ import { ingredientsToText, parseIngredientList } from '../lib/ingredientText'
 import { useStore } from '../lib/store'
 import { Field, Sheet, UserPicker, toast } from './ui'
 import { IconPhoto, IconPlus, IconTrash } from './Icons'
-import { discardPhoto, isPendingPhoto, uploadRecipePhoto } from '../lib/photos'
+import { bindPendingPhoto, discardPhoto, isPendingPhoto, uploadRecipePhoto } from '../lib/photos'
 import { Thumb } from './RecipeRow'
 
+/**
+ * В форме количество живёт строкой, а числом становится при сохранении.
+ * Число в контролируемом поле съедало разделитель: «1,» схлопывалось в «1»,
+ * и набрать «1,5» было невозможно — получалось 15.
+ */
+interface EditIngredient {
+  name: string
+  qtyText: string
+  unit: string
+  note?: string
+}
+
 // Единица пустая по умолчанию: «столько грамм на столько порций» — необязательная точность.
-const EMPTY_INGREDIENT: RecipeIngredient = { name: '', qty: null, unit: '' }
+const EMPTY_INGREDIENT: EditIngredient = { name: '', qtyText: '', unit: '' }
+
+function toEdit(ingredient: RecipeIngredient): EditIngredient {
+  return {
+    name: ingredient.name,
+    qtyText: ingredient.qty != null ? String(ingredient.qty) : '',
+    unit: ingredient.unit,
+    ...(ingredient.note ? { note: ingredient.note } : {}),
+  }
+}
+
+function fromEdit(item: EditIngredient): RecipeIngredient {
+  const qty = Number(item.qtyText.replace(',', '.'))
+  return {
+    name: item.name.trim(),
+    qty: item.qtyText.trim() && Number.isFinite(qty) ? qty : null,
+    unit: item.unit,
+    ...(item.note ? { note: item.note } : {}),
+  }
+}
 
 export function RecipeEditor({
   recipe,
@@ -38,8 +69,8 @@ export function RecipeEditor({
   const [sourceUrl, setSourceUrl] = useState(recipe?.sourceUrl ?? '')
   const [photoId, setPhotoId] = useState(recipe?.photoId)
   const [uploading, setUploading] = useState(false)
-  const [ingredients, setIngredients] = useState<RecipeIngredient[]>(
-    recipe?.ingredients?.length ? recipe.ingredients : [{ ...EMPTY_INGREDIENT }],
+  const [ingredients, setIngredients] = useState<EditIngredient[]>(
+    recipe?.ingredients?.length ? recipe.ingredients.map(toEdit) : [{ ...EMPTY_INGREDIENT }],
   )
   const [mode, setMode] = useState<'rows' | 'text'>('rows')
   const [draftText, setDraftText] = useState('')
@@ -55,7 +86,7 @@ export function RecipeEditor({
     return [...names].sort((a, b) => a.localeCompare(b, 'ru'))
   }, [db.products, db.recipes])
 
-  const setIngredient = (index: number, patch: Partial<RecipeIngredient>) => {
+  const setIngredient = (index: number, patch: Partial<EditIngredient>) => {
     setIngredients((list) => list.map((item, i) => (i === index ? { ...item, ...patch } : item)))
   }
 
@@ -64,7 +95,7 @@ export function RecipeEditor({
     setUploading(true)
     try {
       // Старый файл не трогаем: правку ещё могут отменить, и фото исчезло бы зря.
-      const uploaded = await uploadRecipePhoto(file)
+      const uploaded = await uploadRecipePhoto(file, undefined, recipe?.id)
       setPhotoId(uploaded)
       if (isPendingPhoto(uploaded)) toast('Фото сохранится на Диск, когда появится сеть')
     } catch (error) {
@@ -100,7 +131,7 @@ export function RecipeEditor({
         .split(',')
         .map((tag) => tag.trim())
         .filter(Boolean),
-      ingredients: ingredients.filter((item) => item.name.trim()),
+      ingredients: ingredients.filter((item) => item.name.trim()).map(fromEdit),
       steps,
       timeMin: timeMin ? Number(timeMin) : null,
       servings: servings ? Number(servings) : null,
@@ -114,6 +145,8 @@ export function RecipeEditor({
       regular,
       regularEveryDays: regular ? Math.max(1, Number(regularEveryDays) || 7) : null,
     })
+    // Новый рецепт получил id только сейчас — дописываем его в очередь офлайн-фото.
+    if (photoId && isPendingPhoto(photoId)) bindPendingPhoto(photoId, saved.id)
     onSaved?.(saved)
     onClose()
   }
@@ -214,7 +247,7 @@ export function RecipeEditor({
               <button
                 className={mode === 'text' ? 'active' : ''}
                 onClick={() => {
-                  setDraftText(ingredientsToText(ingredients))
+                  setDraftText(ingredientsToText(ingredients.map(fromEdit)))
                   setMode('text')
                 }}
               >
@@ -232,7 +265,7 @@ export function RecipeEditor({
                 value={draftText}
                 onChange={(event) => {
                   setDraftText(event.target.value)
-                  setIngredients(parseIngredientList(event.target.value))
+                  setIngredients(parseIngredientList(event.target.value).map(toEdit))
                 }}
               />
             </>
@@ -257,11 +290,10 @@ export function RecipeEditor({
                   className="input input-sm"
                   inputMode="decimal"
                   placeholder="кол-во"
-                  value={ingredient.qty ?? ''}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(',', '.').replace(/[^\d.]/g, '')
-                    setIngredient(index, { qty: raw === '' ? null : Number(raw) })
-                  }}
+                  value={ingredient.qtyText}
+                  onChange={(e) =>
+                    setIngredient(index, { qtyText: e.target.value.replace(/[^\d.,]/g, '') })
+                  }
                 />
                 <select
                   className="input input-sm"
@@ -331,8 +363,8 @@ export function RecipeEditor({
           <button className="btn grow" onClick={cancel}>
             Отмена
           </button>
-          <button className="btn btn-primary grow" onClick={submit}>
-            Сохранить
+          <button className="btn btn-primary grow" disabled={uploading} onClick={submit}>
+            {uploading ? 'Фото загружается…' : 'Сохранить'}
           </button>
         </div>
       </div>

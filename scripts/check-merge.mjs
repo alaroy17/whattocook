@@ -1,6 +1,6 @@
 // Разовая проверка логики слияния: запускается через esbuild-сборку src/lib/db.ts.
 // Не входит в приложение, нужна чтобы убедиться в поведении корзины и настроек.
-import { mergeDatabases, pruneTombstones, normalizeDatabase } from '../.check/db.mjs'
+import { mergeDatabases, pruneTombstones, normalizeDatabase, serialize } from '../.check/db.mjs'
 
 let failed = 0
 const check = (name, condition) => {
@@ -51,6 +51,59 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   const merged = mergeDatabases(a, b)
   check('обе почты выжили', merged.settings.userEmails.andrei === 'a@x.ru' && merged.settings.userEmails.sasha === 's@x.ru')
   check('тема взята у свежей версии', merged.settings.theme === 'dark')
+}
+
+// 3б. Перепривязка («Это не я») побеждает старую привязку с удалённой стороны.
+{
+  const remote = base()
+  remote.settings.userEmails = { sasha: 'x@x.ru' }
+  remote.settings.userEmailsAt = { sasha: '2026-08-16T10:00:00.000Z' }
+  remote.settingsUpdatedAt = '2026-08-16T10:00:00.000Z'
+
+  // Локально Андрей забрал почту себе: у Саши снята (пустая строка), у него — свежая.
+  const local = base()
+  local.settings.userEmails = { sasha: '', andrei: 'x@x.ru' }
+  local.settings.userEmailsAt = { sasha: '2026-08-16T12:00:00.000Z', andrei: '2026-08-16T12:00:00.000Z' }
+  local.settingsUpdatedAt = '2026-08-16T12:00:00.000Z'
+
+  const m1 = mergeDatabases(local, remote)
+  const m2 = mergeDatabases(remote, local)
+  check(
+    'перепривязка не откатывается remote-стороной',
+    m1.settings.userEmails.andrei === 'x@x.ru' && m1.settings.userEmails.sasha === '',
+  )
+  check(
+    'перепривязка не зависит от порядка сторон',
+    m2.settings.userEmails.andrei === 'x@x.ru' && m2.settings.userEmails.sasha === '',
+  )
+}
+
+// 3в. Санитайзер: битый импорт не роняет базу, а старым привязкам даётся давность настроек.
+{
+  const db = normalizeDatabase({
+    recipes: { r1: { name: 'Тест' }, r2: { ingredients: 'мусор' } },
+    entries: { e1: { meal: 'dinner' }, e2: { date: '2026-08-10', status: 'weird' } },
+    settings: { userEmails: { sasha: 's@x.ru' } },
+    settingsUpdatedAt: '2026-08-01T00:00:00.000Z',
+  })
+  check('рецепту без ingredients дали пустой список', Array.isArray(db.recipes.r1?.ingredients))
+  check('рецепту без tags дали пустой список', Array.isArray(db.recipes.r1?.tags))
+  check('запись без даты отброшена', db.entries.e1 === undefined)
+  check('кривой статус приведён к done', db.entries.e2?.status === 'done')
+  check('рецепт без имени отброшен', db.recipes.r2 === undefined)
+  check('старой привязке проставлена давность', db.settings.userEmailsAt.sasha === '2026-08-01T00:00:00.000Z')
+}
+
+// 3г. Стабильная сериализация: одинаковое содержимое — одинаковая строка.
+{
+  const a = normalizeDatabase({
+    recipes: { r1: { name: 'Борщ', category: 'Суп' } },
+    settings: { theme: 'dark', currency: '₽' },
+  })
+  const shuffled = JSON.parse(JSON.stringify(a))
+  // Пересобираем объект с другим порядком ключей.
+  const reordered = { settings: shuffled.settings, recipes: shuffled.recipes, ...shuffled }
+  check('порядок ключей не влияет на сериализацию', serialize(a) === serialize(reordered))
 }
 
 // 4. Выданный доступ объединяется, а не перетирается.

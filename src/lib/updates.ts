@@ -10,6 +10,8 @@
 let listener: ((ready: boolean) => void) | null = null
 let waitingWorker: ServiceWorker | null = null
 let reloading = false
+/** Пользователь явно нажал «Обновить» — перезагружаемся даже без прежнего контроллера. */
+let userRequestedUpdate = false
 
 export function onUpdateReady(callback: (ready: boolean) => void): () => void {
   listener = callback
@@ -30,6 +32,7 @@ export function applyUpdate(): void {
     window.location.reload()
     return
   }
+  userRequestedUpdate = true
   waitingWorker.postMessage({ type: 'SKIP_WAITING' })
 }
 
@@ -44,7 +47,8 @@ export function registerServiceWorker(url: string): void {
   const hadController = Boolean(navigator.serviceWorker.controller)
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloading || !hadController) return
+    if (reloading) return
+    if (!hadController && !userRequestedUpdate) return
     reloading = true
     window.location.reload()
   })

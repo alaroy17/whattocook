@@ -33,7 +33,7 @@ function RecipePhoto({ recipe }: { recipe: Recipe }) {
     if (!file) return
     setUploading(true)
     try {
-      const photoId = await uploadRecipePhoto(file, recipe.photoId)
+      const photoId = await uploadRecipePhoto(file, recipe.photoId, recipe.id)
       saveRecipe({ id: recipe.id, photoId })
       // Без сети снимок остаётся в очереди и уедет на Диск при синхронизации.
       toast(isPendingPhoto(photoId) ? 'Фото сохранится на Диск, когда появится сеть' : 'Фото добавлено')

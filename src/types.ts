@@ -208,6 +208,13 @@ export interface Settings {
    * дальше приложение само понимает, кто им пользуется, — переключать вручную не нужно.
    */
   userEmails: Partial<Record<UserId, string>>
+  /**
+   * Когда привязку каждого человека меняли в последний раз. Без этих отметок
+   * слияние двух устройств не может понять, чья привязка новее, и перепривязка
+   * («Это не я») откатывалась удалённой стороной при первой же синхронизации.
+   * Пустая строка в userEmails при свежей отметке означает «привязка снята».
+   */
+  userEmailsAt: Partial<Record<UserId, string>>
   /** Кому уже открыли доступ к папке на Диске — чтобы не гадать, ушло приглашение или нет. */
   sharedWith: string[]
   /**
@@ -229,6 +236,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fridgeRemindDays: 7,
   fridgeReviewedAt: null,
   userEmails: {},
+  userEmailsAt: {},
   sharedWith: [],
   purgedAt: null,
 }

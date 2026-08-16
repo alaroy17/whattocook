@@ -338,12 +338,21 @@ export function Today() {
 
       {logging && (
         <EntryEditor
-          defaults={{ date, meal: 'dinner', status: logging.status, recipeId: logging.recipeId }}
+          defaults={{ date, meal: guessMeal(undefined), status: logging.status, recipeId: logging.recipeId }}
           onClose={() => setLogging(null)}
         />
       )}
-      {editingEntry && db.entries[editingEntry] && (
-        <EntryEditor entry={db.entries[editingEntry]} onClose={() => setEditingEntry(null)} />
+      {/*
+        key обязателен: без него React переиспользует форму со старым состоянием,
+        и «Изменить» из тоста поверх открытого редактора записывал поля одной
+        записи в другую.
+      */}
+      {editingEntry && db.entries[editingEntry] && !db.entries[editingEntry].deletedAt && (
+        <EntryEditor
+          key={editingEntry}
+          entry={db.entries[editingEntry]}
+          onClose={() => setEditingEntry(null)}
+        />
       )}
       {creating && <RecipeEditor onClose={() => setCreating(false)} />}
     </>

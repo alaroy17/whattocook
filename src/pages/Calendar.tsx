@@ -285,6 +285,7 @@ export function CalendarPage() {
 
       {editing && (
         <EntryEditor
+          key={editing === 'new' ? 'new' : editing.id}
           entry={editing === 'new' ? undefined : editing}
           defaults={editing === 'new' ? { date: selected, meal: 'dinner', status: 'done' } : undefined}
           onClose={() => setEditing(null)}

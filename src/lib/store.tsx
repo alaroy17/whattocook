@@ -39,13 +39,14 @@ interface StoreValue {
   /** Вошли в Google, но неизвестно, кто это, — надо спросить один раз. */
   needsIdentity: boolean
   sync: SyncState
-  connect: () => Promise<void>
+  /** true — синхронизация прошла; false — не вышло (детали в sync.status/message). */
+  connect: () => Promise<boolean>
   /** Открыто окно входа Google — интерфейс показывает ожидание. */
   connecting: boolean
   disconnect: () => void
   /** Войти другим Google-аккаунтом — единственный случай с выбором из списка. Возвращает почту. */
   switchAccount: () => Promise<string | null>
-  syncNow: () => Promise<void>
+  syncNow: () => Promise<boolean>
   /** Создать базу на своём Диске — когда общей нет и её никто не откроет. */
   createDatabase: () => Promise<void>
   saveRecipe: (recipe: Partial<Recipe> & { id?: string }) => Recipe
@@ -129,12 +130,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   )
 
   const runSync = useCallback(
-    async (interactive: boolean) => {
+    async (interactive: boolean): Promise<boolean> => {
       if (!drive.getClientId()) {
         setSync((s) => ({ ...s, status: 'unconfigured', message: '' }))
-        return
+        return false
       }
-      if (syncing.current) return
+      if (syncing.current) return false
       syncing.current = true
       setSync((s) => ({ ...s, status: 'syncing', message: '' }))
       try {
@@ -186,13 +187,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         if (email) drive.saveEmail(email)
         setSync({ status: 'idle', message: '', lastSyncAt: at, email })
+        return true
       } catch (error) {
         // Базы нет ни своей, ни общей — спрашиваем пользователя, а не создаём вторую молча.
         if (error instanceof drive.NoDatabaseError) {
           const email = await drive.fetchUserInfo().then((info) => info.email).catch(() => null)
           if (email) drive.saveEmail(email)
           setSync((s) => ({ ...s, status: 'no-database', message: '', email: email ?? s.email }))
-          return
+          return false
+        }
+        /*
+         * Просто нет сети — это не «Ошибка синхронизации» и не «вход истёк»:
+         * запуск в самолёте показывал красный статус и плашку входа на ровном месте.
+         */
+        const noNetwork =
+          !navigator.onLine ||
+          (error instanceof TypeError && /fetch|network|load failed/i.test(error.message))
+        if (noNetwork) {
+          setSync((s) => ({ ...s, status: 'offline', message: '' }))
+          return false
         }
         const message = error instanceof Error ? error.message : String(error)
         const needsLogin = error instanceof drive.DriveError && error.needsInteraction
@@ -201,6 +214,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           status: needsLogin && !interactive ? 'offline' : 'error',
           message: needsLogin && !interactive ? '' : message,
         }))
+        return false
       } finally {
         syncing.current = false
       }
@@ -219,14 +233,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (queue.length === 0) return
     flushingPhotos.current = true
     try {
-      for (const pendingId of queue) {
+      for (const pending of queue) {
         try {
-          const photoId = await uploadPendingPhoto(pendingId)
+          const photoId = await uploadPendingPhoto(pending.id)
           if (!photoId) continue
           mutate((draft) => {
+            let attached = false
             for (const [id, recipe] of Object.entries(draft.recipes)) {
-              if (recipe.photoId === pendingId) {
+              if (recipe.photoId === pending.id) {
                 draft.recipes[id] = { ...recipe, photoId, updatedAt: nowIso() }
+                attached = true
+              }
+            }
+            /*
+             * Ссылку из рецепта могла вытеснить параллельная правка второго
+             * человека (LWW по записям). Фото от этого пропадать не должно —
+             * прикрепляем по запомненному рецепту поверх его правки.
+             */
+            if (!attached && pending.recipeId) {
+              const recipe = draft.recipes[pending.recipeId]
+              if (recipe && !recipe.deletedAt) {
+                draft.recipes[pending.recipeId] = { ...recipe, photoId, updatedAt: nowIso() }
               }
             }
           })
@@ -319,12 +346,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!email) return
       mutate((draft) => {
         const map: Partial<Record<UserId, string>> = { ...draft.settings.userEmails }
+        const at: Partial<Record<UserId, string>> = { ...draft.settings.userEmailsAt }
+        const when = nowIso()
+        /*
+         * Снятая привязка — пустая строка со свежей отметкой, а не удаление ключа:
+         * удалённый ключ слияние «воскрешало» старым значением со второго устройства,
+         * и «Это не я» откатывалось при первой же синхронизации.
+         */
         for (const user of USERS) {
-          if (map[user.id]?.trim().toLowerCase() === email.toLowerCase()) delete map[user.id]
+          if (user.id !== id && map[user.id]?.trim().toLowerCase() === email.toLowerCase()) {
+            map[user.id] = ''
+            at[user.id] = when
+          }
         }
         map[id] = email
-        draft.settings = { ...draft.settings, userEmails: map }
-        draft.settingsUpdatedAt = nowIso()
+        at[id] = when
+        draft.settings = { ...draft.settings, userEmails: map, userEmailsAt: at }
+        draft.settingsUpdatedAt = when
       })
     }
 
@@ -339,7 +377,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         // Флаг «ждём окно Google» — чтобы страница показывала, что происходит.
         setConnecting(true)
         try {
-          await runSyncRef.current(true)
+          return await runSyncRef.current(true)
         } finally {
           setConnecting(false)
         }
@@ -422,15 +460,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const names: Collection[] = collection
             ? [collection]
             : ['recipes', 'entries', 'products', 'comments']
+          /*
+           * Отметка очистки — по самому свежему УВИДЕННОМУ надгробию, а не по часам.
+           * purgedAt = «сейчас» стирал бы и удаления, сделанные вторым телефоном
+           * офлайн, которых очищавший никогда не видел, — блюдо воскресало у обоих.
+           */
+          let latestSeen = ''
           for (const name of names) {
             const target = draft[name] as Record<string, Syncable>
             for (const [id, item] of Object.entries(target)) {
-              if (item.deletedAt) delete target[id]
+              if (item.deletedAt) {
+                if (item.deletedAt > latestSeen) latestSeen = item.deletedAt
+                delete target[id]
+              }
             }
           }
-          // Отметка нужна, чтобы слияние не вернуло стёртое с другого устройства.
-          draft.settings = { ...draft.settings, purgedAt: nowIso() }
-          draft.settingsUpdatedAt = nowIso()
+          if (latestSeen) {
+            const current = draft.settings.purgedAt
+            draft.settings = {
+              ...draft.settings,
+              purgedAt: current && current > latestSeen ? current : latestSeen,
+            }
+            draft.settingsUpdatedAt = nowIso()
+          }
         })
       },
       updateSettings: (patch) => {

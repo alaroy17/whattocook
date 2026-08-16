@@ -343,7 +343,7 @@ export function Plan() {
         />
       )}
 
-      {editing && <EntryEditor entry={editing} onClose={() => setEditing(null)} />}
+      {editing && <EntryEditor key={editing.id} entry={editing} onClose={() => setEditing(null)} />}
 
       {action && (
         <Sheet title={nameOf(action)} onClose={() => setAction(null)}>

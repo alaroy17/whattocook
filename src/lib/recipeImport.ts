@@ -78,8 +78,12 @@ function extractJson(text: string): string | null {
 function asNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   if (typeof value === 'string') {
-    const parsed = Number(value.replace(',', '.').replace(/[^\d.]/g, ''))
-    if (Number.isFinite(parsed) && value.trim()) return parsed
+    // Берём первое число, а не склейку всех цифр: «2-3 порции» — это 2, а не 23.
+    const match = value.match(/\d+(?:[.,]\d+)?/)
+    if (match) {
+      const parsed = Number(match[0].replace(',', '.'))
+      if (Number.isFinite(parsed)) return parsed
+    }
   }
   return null
 }

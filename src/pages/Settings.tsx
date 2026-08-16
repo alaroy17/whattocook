@@ -118,8 +118,9 @@ export function SettingsPage() {
   const doConnect = async () => {
     setBusy(true)
     try {
-      await connect()
-      toast('Google Drive подключён')
+      // Тост — по фактическому результату: раньше «подключён» показывался и при неудаче.
+      const ok = await connect()
+      toast(ok ? 'Google Drive подключён' : 'Войти не получилось — подробности выше')
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Не удалось подключиться')
     } finally {
@@ -434,7 +435,13 @@ export function SettingsPage() {
              * и прочие следы, из-за которых после «очистки» поведение было странным.
              */
             for (const key of Object.keys(localStorage)) {
-              if (key.startsWith('wtc.') && !key.startsWith('wtc.google.')) {
+              // Очередь офлайн-фото не трогаем: без неё снимки с photoId «pending-…»
+              // навсегда остались бы заглушками и здесь, и у второго человека.
+              if (
+                key.startsWith('wtc.') &&
+                !key.startsWith('wtc.google.') &&
+                key !== 'wtc.photos.pending'
+              ) {
                 localStorage.removeItem(key)
               }
             }

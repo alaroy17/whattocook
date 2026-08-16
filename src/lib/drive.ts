@@ -112,7 +112,35 @@ let pending: { resolve: (token: string) => void; reject: (error: Error) => void 
 let inFlight: Promise<string> | null = null
 
 const TOKEN_KEY = 'wtc.google.token'
+const TOKEN_COOKIE = 'wtc_gt'
 const EMAIL_KEY = 'wtc.google.email'
+
+/*
+ * Токен — в куке, привязанной к пути приложения, а не в localStorage.
+ * GitHub Pages кладёт все проекты одного аккаунта на ОДИН origin
+ * (alaroy17.github.io), и localStorage читается любой соседней страницей —
+ * токен с полным доступом к Диску так хранить нельзя. document.cookie
+ * отдаёт куку только страницам, чей путь совпадает с её Path.
+ */
+function tokenCookiePath(): string {
+  const base = import.meta.env.BASE_URL || '/'
+  return base.endsWith('/') ? base : `${base}/`
+}
+
+function readTokenCookie(): string | null {
+  const prefix = `${TOKEN_COOKIE}=`
+  for (const part of document.cookie.split('; ')) {
+    if (part.startsWith(prefix)) return decodeURIComponent(part.slice(prefix.length))
+  }
+  return null
+}
+
+function writeTokenCookie(value: string | null, maxAgeSeconds: number): void {
+  const body = value ? encodeURIComponent(value) : ''
+  document.cookie = `${TOKEN_COOKIE}=${body}; path=${tokenCookiePath()}; max-age=${
+    value ? maxAgeSeconds : 0
+  }; secure; samesite=strict`
+}
 
 /** Почта, под которой входили, — для login_hint, чтобы Google не спрашивал «какой аккаунт?». */
 export function getSavedEmail(): string | null {
@@ -123,18 +151,21 @@ export function saveEmail(email: string): void {
   localStorage.setItem(EMAIL_KEY, email)
 }
 
-/**
- * Токен живёт в localStorage: установленное PWA убивает sessionStorage при каждом
- * запуске, и приложение просило вход заново, хотя токен ещё был действителен.
- */
+/** Токен переживает перезапуски PWA (sessionStorage их не переживал — и просился логин). */
 function restoreToken(): void {
   try {
-    const raw = localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
+    // Значения из прежних версий забираем один раз и удаляем из общедоступных хранилищ.
+    const legacy = localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
+    localStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_KEY)
+
+    const raw = readTokenCookie() ?? legacy
     if (!raw) return
     const parsed = JSON.parse(raw) as { token: string; expiresAt: number }
     if (parsed.expiresAt > Date.now() + 30_000) {
       accessToken = parsed.token
       expiresAt = parsed.expiresAt
+      if (legacy && !readTokenCookie()) writeTokenCookie(raw, Math.floor((expiresAt - Date.now()) / 1000))
     }
   } catch {
     /* игнорируем */
@@ -146,7 +177,7 @@ function storeToken(token: string, expiresIn: number): void {
   accessToken = token
   expiresAt = Date.now() + expiresIn * 1000
   try {
-    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, expiresAt }))
+    writeTokenCookie(JSON.stringify({ token, expiresAt }), Math.max(60, expiresIn - 60))
   } catch {
     /* игнорируем */
   }
@@ -226,16 +257,15 @@ export async function getAccessToken(_interactive: boolean, promptMode: '' | 'se
 export function switchAccount(): Promise<string> {
   accessToken = ''
   expiresAt = 0
-  localStorage.removeItem(TOKEN_KEY)
+  writeTokenCookie(null, 0)
   return getAccessToken(true, 'select_account')
 }
 
 export function signOut(): void {
-  localStorage.removeItem(TOKEN_KEY)
+  writeTokenCookie(null, 0)
   const token = accessToken
   accessToken = ''
   expiresAt = 0
-  sessionStorage.removeItem('wtc.google.token')
   if (token && window.google?.accounts?.oauth2) {
     window.google.accounts.oauth2.revoke(token)
   }

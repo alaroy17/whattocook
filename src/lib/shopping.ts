@@ -104,24 +104,43 @@ export function groupShoppingList(items: ShoppingItem[]): { group: string; items
 const CHECKED_KEY = 'wtc.shopping.checked'
 
 /**
- * Вычеркнутые продукты привязаны к неделе: без этого купленный на этой неделе сыр
- * оказывался бы уже вычеркнутым в списке на следующую.
+ * Вычеркнутое хранится по неделям, а не одним слотом: одна общая запись затиралась
+ * при листании недель — заглянул в следующую неделю, вернулся, а отметки текущей
+ * пропали. Держим несколько последних недель.
  */
-export function loadChecked(weekStart: string): Set<string> {
+type CheckedStore = Record<string, string[]>
+
+function loadStore(): CheckedStore {
   try {
-    const raw = JSON.parse(localStorage.getItem(CHECKED_KEY) ?? 'null') as {
-      weekStart?: string
-      keys?: string[]
-    } | null
-    if (!raw || raw.weekStart !== weekStart) return new Set()
-    return new Set(raw.keys ?? [])
+    const raw = JSON.parse(localStorage.getItem(CHECKED_KEY) ?? 'null') as unknown
+    if (!raw || typeof raw !== 'object') return {}
+    // Прежний формат — { weekStart, keys } одной недели.
+    const legacy = raw as { weekStart?: string; keys?: string[] }
+    if (typeof legacy.weekStart === 'string' && Array.isArray(legacy.keys)) {
+      return { [legacy.weekStart]: legacy.keys }
+    }
+    const store: CheckedStore = {}
+    for (const [week, keys] of Object.entries(raw as Record<string, unknown>)) {
+      if (Array.isArray(keys)) store[week] = keys.filter((k): k is string => typeof k === 'string')
+    }
+    return store
   } catch {
-    return new Set()
+    return {}
   }
 }
 
+export function loadChecked(weekStart: string): Set<string> {
+  return new Set(loadStore()[weekStart] ?? [])
+}
+
 export function saveChecked(weekStart: string, checked: Set<string>): void {
-  localStorage.setItem(CHECKED_KEY, JSON.stringify({ weekStart, keys: [...checked] }))
+  const store = loadStore()
+  store[weekStart] = [...checked]
+  // Старые недели не нужны — оставляем шесть последних.
+  const weeks = Object.keys(store).sort().reverse().slice(0, 6)
+  const trimmed: CheckedStore = {}
+  for (const week of weeks) trimmed[week] = store[week]
+  localStorage.setItem(CHECKED_KEY, JSON.stringify(trimmed))
 }
 
 /** Текст для отправки в мессенджер — «скинь мне список». */

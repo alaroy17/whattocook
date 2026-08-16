@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useStore } from '../lib/store'
 import { IconCloud } from './Icons'
 import { toast } from './ui'
@@ -11,9 +12,23 @@ import { toast } from './ui'
  */
 export function ConnectNotice() {
   const { sync, connect, connecting } = useStore()
+  const [online, setOnline] = useState(() => navigator.onLine)
+
+  useEffect(() => {
+    const up = () => setOnline(true)
+    const down = () => setOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
 
   const connected = sync.status === 'idle' || sync.status === 'syncing'
   if (connected || sync.status === 'no-database') return null
+  // Без сети предлагать «Войти» бессмысленно — это не проблема входа.
+  if (!online) return null
 
   // На этом устройстве вход уже был — значит сессия истекла, а не «ничего не настроено».
   const expired = sync.lastSyncAt !== null

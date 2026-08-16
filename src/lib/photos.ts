@@ -58,25 +58,55 @@ async function writeCache(photoId: string, blob: Blob): Promise<void> {
 const PENDING_PREFIX = 'pending-'
 const PENDING_KEY = 'wtc.photos.pending'
 
+export interface PendingPhoto {
+  id: string
+  /**
+   * К какому рецепту снимок относится. Нужно на случай, когда второй человек
+   * успел отредактировать рецепт, пока мы были офлайн: его правка побеждает
+   * по свежести и вытесняет pending-ссылку из рецепта — без recipeId загруженное
+   * фото было бы не к чему прикрепить и оно молча пропадало.
+   */
+  recipeId: string | null
+}
+
 export function isPendingPhoto(photoId: string | undefined | null): boolean {
   return Boolean(photoId?.startsWith(PENDING_PREFIX))
 }
 
-export function listPendingPhotos(): string[] {
+export function listPendingPhotos(): PendingPhoto[] {
   try {
-    const raw = JSON.parse(localStorage.getItem(PENDING_KEY) ?? '[]') as string[]
-    return Array.isArray(raw) ? raw : []
+    const raw = JSON.parse(localStorage.getItem(PENDING_KEY) ?? '[]') as unknown
+    if (!Array.isArray(raw)) return []
+    return raw
+      .map((item): PendingPhoto | null => {
+        // Старый формат — просто строки идентификаторов.
+        if (typeof item === 'string') return { id: item, recipeId: null }
+        if (item && typeof item === 'object' && typeof (item as PendingPhoto).id === 'string') {
+          const recipeId = (item as PendingPhoto).recipeId
+          return { id: (item as PendingPhoto).id, recipeId: typeof recipeId === 'string' ? recipeId : null }
+        }
+        return null
+      })
+      .filter((item): item is PendingPhoto => item !== null)
   } catch {
     return []
   }
 }
 
-function savePending(ids: string[]): void {
-  localStorage.setItem(PENDING_KEY, JSON.stringify(ids))
+function savePending(items: PendingPhoto[]): void {
+  localStorage.setItem(PENDING_KEY, JSON.stringify(items))
 }
 
 function removePending(photoId: string): void {
-  savePending(listPendingPhotos().filter((id) => id !== photoId))
+  savePending(listPendingPhotos().filter((item) => item.id !== photoId))
+}
+
+/** Дозаписывает привязку к рецепту, когда он стал известен (новый рецепт получил id при сохранении). */
+export function bindPendingPhoto(photoId: string, recipeId: string): void {
+  if (!isPendingPhoto(photoId)) return
+  savePending(
+    listPendingPhotos().map((item) => (item.id === photoId ? { ...item, recipeId } : item)),
+  )
 }
 
 export async function readPhotoBlob(photoId: string): Promise<Blob | null> {
@@ -98,7 +128,11 @@ export async function uploadPendingPhoto(pendingId: string): Promise<string | nu
   return photoId
 }
 
-export async function uploadRecipePhoto(file: File, replacing?: string): Promise<string> {
+export async function uploadRecipePhoto(
+  file: File,
+  replacing?: string,
+  recipeId?: string,
+): Promise<string> {
   const blob = await compressImage(file)
 
   let photoId: string
@@ -108,11 +142,11 @@ export async function uploadRecipePhoto(file: File, replacing?: string): Promise
     } catch {
       // Сеть пропала на середине — откладываем, как и при офлайне.
       photoId = `${PENDING_PREFIX}${uid()}`
-      savePending([...listPendingPhotos(), photoId])
+      savePending([...listPendingPhotos(), { id: photoId, recipeId: recipeId ?? null }])
     }
   } else {
     photoId = `${PENDING_PREFIX}${uid()}`
-    savePending([...listPendingPhotos(), photoId])
+    savePending([...listPendingPhotos(), { id: photoId, recipeId: recipeId ?? null }])
   }
 
   await writeCache(photoId, blob)

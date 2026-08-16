@@ -12,10 +12,21 @@ export function NoDatabasePrompt() {
   const { sync, syncNow, createDatabase, disconnect } = useStore()
   const [busy, setBusy] = useState(false)
 
-  const run = (action: () => Promise<void>, done: string) => {
+  // Тост честный: раньше «Общая база найдена» показывался, даже когда её не нашли.
+  const recheck = () => {
     setBusy(true)
-    void action()
-      .then(() => toast(done))
+    void syncNow()
+      .then((ok) => toast(ok ? 'Общая база найдена' : 'Пока не видно — проверьте, что приглашение открыто'))
+      .catch((error: unknown) =>
+        toast(error instanceof Error ? error.message : 'Не получилось, попробуйте ещё раз'),
+      )
+      .finally(() => setBusy(false))
+  }
+
+  const create = () => {
+    setBusy(true)
+    void createDatabase()
+      .then(() => toast('База создана'))
       .catch((error: unknown) =>
         toast(error instanceof Error ? error.message : 'Не получилось, попробуйте ещё раз'),
       )
@@ -30,18 +41,10 @@ export function NoDatabasePrompt() {
       </p>
 
       <div className="stack" style={{ marginTop: 14 }}>
-        <button
-          className="btn btn-block"
-          disabled={busy}
-          onClick={() => run(syncNow, 'Общая база найдена')}
-        >
+        <button className="btn btn-block" disabled={busy} onClick={recheck}>
           Мне открыли доступ — проверить ещё раз
         </button>
-        <button
-          className="btn btn-primary btn-block"
-          disabled={busy}
-          onClick={() => run(createDatabase, 'База создана')}
-        >
+        <button className="btn btn-primary btn-block" disabled={busy} onClick={create}>
           Создать новую базу
         </button>
         <button className="btn btn-ghost btn-block" onClick={disconnect}>

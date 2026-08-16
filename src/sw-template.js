@@ -5,8 +5,13 @@ const BASE = '__BASE__'
 
 self.addEventListener('install', (event) => {
   // Новая версия скачивается в свой кэш и ждёт: страница сама решит, когда переключиться,
-  // чтобы не менять код под работающим приложением.
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)))
+  // чтобы не менять код под работающим приложением. cache: 'reload' — мимо HTTP-кэша,
+  // иначе в прекэш мог попасть залежавшийся index.html и «Обновить» давало старую оболочку.
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(PRECACHE.map((url) => new Request(url, { cache: 'reload' })))),
+  )
 })
 
 self.addEventListener('message', (event) => {
@@ -35,8 +40,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone()
-          caches.open(CACHE).then((cache) => cache.put(BASE, copy))
+          // Ошибочный ответ (404 в окно выкладки, 5xx) кэшировать нельзя:
+          // он перезаписал бы рабочую оболочку, и офлайн-запуск открывал бы страницу ошибки.
+          if (response.ok) {
+            const copy = response.clone()
+            caches.open(CACHE).then((cache) => cache.put(BASE, copy))
+          }
           return response
         })
         .catch(() => caches.match(BASE).then((hit) => hit || caches.match(request))),
