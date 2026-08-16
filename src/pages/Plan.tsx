@@ -15,6 +15,7 @@ import {
   shoppingListToText,
 } from '../lib/shopping'
 import { buildProductIndex, servingsMultiplier } from '../lib/cost'
+import { entryForRecipeOn } from '../lib/entries'
 import { classNames, formatAmount, formatMoney } from '../lib/util'
 import { IconCart, IconCheck, IconChevronLeft, IconChevronRight, IconPlus } from '../components/Icons'
 
@@ -316,6 +317,11 @@ export function Plan() {
           }
           onClose={() => setPicking(null)}
           onPick={(recipe) => {
+            // Одно блюдо в один день — один раз.
+            if (entryForRecipeOn(db, picking, recipe.id)) {
+              toast('Уже в плане на этот день')
+              return
+            }
             saveEntry({ date: picking, meal: pickMeal, status: 'planned', recipeId: recipe.id })
           }}
           onFreeText={(text) => {

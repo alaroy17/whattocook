@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MEAL_SLOTS, USERS, type Cook, type Entry, type MealSlot, type Recipe } from '../types'
 import { useStore } from '../lib/store'
 import { Avatar, Confirm, Field, Segmented, Sheet, Stars, UserPicker, toast } from './ui'
@@ -19,6 +20,7 @@ export function EntryEditor({
   onClose: () => void
 }) {
   const { db, saveEntry, remove, restore } = useStore()
+  const navigate = useNavigate()
   const initial = entry ?? defaults ?? {}
   const [date, setDate] = useState(initial.date ?? '')
   const [meal, setMeal] = useState<MealSlot>(initial.meal ?? 'dinner')
@@ -124,16 +126,28 @@ export function EntryEditor({
               {recipe ? recipe.name : title || 'Выбрать из рецептов'}
             </button>
             {(recipe || title) && (
-              <button
-                className="btn btn-sm btn-ghost"
-                style={{ alignSelf: 'flex-start' }}
-                onClick={() => {
-                  setRecipeId(undefined)
-                  setTitle('')
-                }}
-              >
-                Очистить
-              </button>
+              <div className="row" style={{ gap: 4 }}>
+                {recipe && (
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={() => {
+                      onClose()
+                      navigate(`/recipes/${recipe.id}`)
+                    }}
+                  >
+                    Открыть рецепт
+                  </button>
+                )}
+                <button
+                  className="btn btn-sm btn-ghost"
+                  onClick={() => {
+                    setRecipeId(undefined)
+                    setTitle('')
+                  }}
+                >
+                  Очистить
+                </button>
+              </div>
             )}
           </div>
 

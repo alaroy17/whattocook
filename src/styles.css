@@ -1029,6 +1029,70 @@ textarea.input {
 
 .divider { height: 1px; background: var(--border); margin: 12px 0; }
 
+/* ─── Свайп-строки и статус дня ───────────────────────────────────────────── */
+.swipe-row {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+
+.swipe-row:last-child { border-bottom: 0; }
+
+.swipe-row .recipe-row { border-bottom: 0; }
+
+.swipe-actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+}
+
+.swipe-action {
+  border: 0;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.swipe-action.danger { background: #c0523a; color: #fff; }
+
+.swipe-content {
+  position: relative;
+  background: var(--surface);
+  transition: transform 0.18s ease;
+  touch-action: pan-y;
+}
+
+/* Кружок-статус: пустой — планируем, с галкой — приготовили */
+.status-toggle {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  color: #fff;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.status-toggle.done {
+  background: var(--good);
+  border-color: var(--good);
+}
+
+.done-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 /* Плашка «вышло обновление» — над таб-баром, ничего не перекрывает */
 .update-bar {
   position: fixed;

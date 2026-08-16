@@ -9,10 +9,10 @@ import { RecipeEditor } from '../components/RecipeEditor'
 import { EntryEditor } from '../components/EntryEditor'
 import { buildProductIndex, ingredientCost, recipeCost, scaleIngredient, servingsMultiplier } from '../lib/cost'
 import { buildHistory, daysSince, guessMeal } from '../lib/suggest'
+import { entryForRecipeOn } from '../lib/entries'
 import { formatDate, today } from '../lib/date'
 import { agoWord, countOf, formatAmount, formatMoney, normalizeName, safeUrl, timesWord } from '../lib/util'
 import {
-  IconCheck,
   IconEdit,
   IconHeart,
   IconMinus,
@@ -178,12 +178,28 @@ export function RecipeDetail() {
           <button
             className="btn btn-primary grow"
             onClick={() => {
+              /*
+               * Первое нажатие — блюдо в списке дня как план. Второе — отметка
+               * «приготовили». Дубли не создаются.
+               */
+              const existing = entryForRecipeOn(db, today(), recipe.id)
+              if (existing) {
+                if (existing.status === 'planned') {
+                  saveEntry({ id: existing.id, status: 'done' })
+                  toast('Отметили приготовленным')
+                } else {
+                  toast('Сегодня уже готовили')
+                }
+                return
+              }
               const meal = guessMeal(recipe.category)
-              saveEntry({ date: today(), meal, status: 'done', recipeId: recipe.id })
-              toast(`Записали в «${MEAL_SLOTS.find((slot) => slot.id === meal)?.name}»`)
+              saveEntry({ date: today(), meal, status: 'planned', recipeId: recipe.id })
+              toast(
+                `Добавили на сегодня — ${MEAL_SLOTS.find((slot) => slot.id === meal)?.name.toLowerCase()}`,
+              )
             }}
           >
-            <IconCheck size={16} /> Готовим сегодня
+            <IconPlus size={16} /> Готовим сегодня
           </button>
           <button className="btn" onClick={() => setPlanning(true)}>
             В план

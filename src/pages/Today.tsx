@@ -19,14 +19,16 @@ import { ConnectNotice } from '../components/ConnectNotice'
 import { RecipeEditor } from '../components/RecipeEditor'
 import { IconCheck, IconDice, IconFridge, IconPlus, IconRefresh, IconRepeat } from '../components/Icons'
 import { MEAL_SLOTS } from '../types'
-import { agoWord, daysWord, intervalWord } from '../lib/util'
+import { agoWord, classNames, daysWord, intervalWord } from '../lib/util'
 import { categoriesWithRecipes } from '../lib/categories'
 import { fridgeNeedsReview, fridgeStaleDays } from '../lib/fridge'
+import { entryForRecipeOn } from '../lib/entries'
+import { SwipeRow } from '../components/SwipeRow'
 
 type Mode = 'smart' | 'random'
 
 export function Today() {
-  const { db, saveEntry } = useStore()
+  const { db, saveEntry, remove, restore } = useStore()
   const navigate = useNavigate()
   const date = today()
 
@@ -73,10 +75,41 @@ export function Today() {
   const nameOf = (entryRecipeId: string | undefined, title: string | undefined) =>
     (entryRecipeId ? db.recipes[entryRecipeId]?.name : title) ?? 'Без названия'
 
-  const markCooked = (recipeId: string) => {
+  const mealName = (meal: string) => MEAL_SLOTS.find((slot) => slot.id === meal)?.name ?? ''
+
+  /**
+   * «Готовим сегодня» добавляет блюдо в список дня как план — галочку человек
+   * ставит сам, когда приготовил. Повторное нажатие не создаёт дубль.
+   */
+  const addToday = (recipeId: string) => {
+    const existing = entryForRecipeOn(db, date, recipeId)
+    if (existing) {
+      toast(existing.status === 'planned' ? 'Уже в списке на сегодня' : 'Сегодня уже готовили')
+      return
+    }
+    const meal = guessMeal(db.recipes[recipeId]?.category)
+    const saved = saveEntry({ date, meal, status: 'planned', recipeId })
+    toast(`Добавили на сегодня — ${mealName(meal).toLowerCase()}`, {
+      label: 'Изменить',
+      onClick: () => setEditingEntry(saved.id),
+    })
+  }
+
+  /** Постоянные блюда — быстрая запись «съели»: одним нажатием, тоже без дублей. */
+  const logRegular = (recipeId: string) => {
+    const existing = entryForRecipeOn(db, date, recipeId)
+    if (existing) {
+      if (existing.status === 'planned') {
+        saveEntry({ id: existing.id, status: 'done' })
+        toast('Отметили приготовленным')
+      } else {
+        toast('Сегодня уже записано')
+      }
+      return
+    }
     const meal = guessMeal(db.recipes[recipeId]?.category)
     const saved = saveEntry({ date, meal, status: 'done', recipeId })
-    toast(`Записали в «${MEAL_SLOTS.find((slot) => slot.id === meal)?.name}»`, {
+    toast(`Записали — ${mealName(meal).toLowerCase()}`, {
       label: 'Изменить',
       onClick: () => setEditingEntry(saved.id),
     })
@@ -114,32 +147,70 @@ export function Today() {
             <div className="section-head">
               <h2>На сегодня</h2>
             </div>
+            {/*
+              Правила простые: тап по блюду — открыть рецепт; кружок слева — статус
+              (пустой «планируем», галка «приготовили»); смахнуть влево — изменить
+              или удалить. Никаких форм по тапу.
+            */}
             <div className="card-flat">
-              {todayEntries.map((entry) => (
-                <div key={entry.id} className="recipe-row" onClick={() => setEditingEntry(entry.id)}>
-                  <Thumb photoId={entry.recipeId ? db.recipes[entry.recipeId]?.photoId : undefined} />
-                  <div className="grow">
-                    <div className="recipe-title ellipsis">{nameOf(entry.recipeId, entry.title)}</div>
-                    <div className="meta">
-                      <span>{MEAL_SLOTS.find((m) => m.id === entry.meal)?.name}</span>
-                      <span>{entry.status === 'done' ? 'приготовили' : 'в планах'}</span>
-                    </div>
-                  </div>
-                  {entry.cook && <Avatar id={entry.cook} />}
-                  {entry.status === 'planned' && (
-                    <button
-                      className="btn btn-sm"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        saveEntry({ id: entry.id, status: 'done' })
-                        toast('Отметили как приготовленное')
-                      }}
+              {todayEntries.map((entry) => {
+                const recipe = entry.recipeId ? db.recipes[entry.recipeId] : undefined
+                return (
+                  <SwipeRow
+                    key={entry.id}
+                    actions={[
+                      { label: 'Изменить', kind: 'normal', onClick: () => setEditingEntry(entry.id) },
+                      {
+                        label: 'Удалить',
+                        kind: 'danger',
+                        onClick: () => {
+                          remove('entries', entry.id)
+                          toast('Запись удалена', {
+                            label: 'Отменить',
+                            onClick: () => restore('entries', entry.id),
+                          })
+                        },
+                      },
+                    ]}
+                  >
+                    <div
+                      className="recipe-row"
+                      onClick={() =>
+                        recipe && !recipe.deletedAt
+                          ? navigate(`/recipes/${recipe.id}`)
+                          : setEditingEntry(entry.id)
+                      }
                     >
-                      <IconCheck size={15} /> Готово
-                    </button>
-                  )}
-                </div>
-              ))}
+                      <button
+                        className={classNames('status-toggle', entry.status === 'done' && 'done')}
+                        aria-label={entry.status === 'done' ? 'Приготовлено' : 'Отметить приготовленным'}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          saveEntry({ id: entry.id, status: entry.status === 'done' ? 'planned' : 'done' })
+                        }}
+                      >
+                        {entry.status === 'done' && <IconCheck size={15} />}
+                      </button>
+                      <Thumb photoId={recipe?.photoId} />
+                      <div className="grow">
+                        <div
+                          className={classNames(
+                            'recipe-title ellipsis',
+                            entry.status === 'done' && 'done-title',
+                          )}
+                        >
+                          {nameOf(entry.recipeId, entry.title)}
+                        </div>
+                        <div className="meta">
+                          <span>{mealName(entry.meal)}</span>
+                          {entry.servings ? <span>{entry.servings} порц.</span> : null}
+                        </div>
+                      </div>
+                      {entry.cook && <Avatar id={entry.cook} />}
+                    </div>
+                  </SwipeRow>
+                )
+              })}
             </div>
           </section>
         )}
@@ -158,7 +229,7 @@ export function Today() {
                 <button
                   key={item.recipe.id}
                   className={`regular-card${item.due ? ' due' : ''}`}
-                  onClick={() => markCooked(item.recipe.id)}
+                  onClick={() => logRegular(item.recipe.id)}
                 >
                   <span className="name">{item.recipe.name}</span>
                   <span className="small muted">{agoWord(item.days)}</span>
@@ -222,8 +293,8 @@ export function Today() {
               </div>
 
               <div className="row" style={{ marginTop: 14 }}>
-                <button className="btn btn-primary grow" onClick={() => markCooked(hero.recipe.id)}>
-                  <IconCheck size={16} /> Готовим это
+                <button className="btn btn-primary grow" onClick={() => addToday(hero.recipe.id)}>
+                  <IconPlus size={16} /> Готовим сегодня
                 </button>
                 <button className="btn" onClick={() => setLogging({ recipeId: hero.recipe.id, status: 'planned' })}>
                   В план
@@ -279,13 +350,13 @@ export function Today() {
                   right={
                     <button
                       className="btn btn-sm"
-                      aria-label="Записать в историю"
+                      aria-label="Добавить на сегодня"
                       onClick={(event) => {
                         event.stopPropagation()
-                        markCooked(suggestion.recipe.id)
+                        addToday(suggestion.recipe.id)
                       }}
                     >
-                      <IconCheck size={15} />
+                      <IconPlus size={15} />
                     </button>
                   }
                 />
