@@ -267,7 +267,10 @@ export function Plan() {
                             {item.name}
                             <div className="small muted ellipsis">{item.usedIn.join(', ')}</div>
                           </span>
-                          <span className="small muted">{formatAmount(item.qty, item.unit)}</span>
+                          {/* Единица без количества («г» сама по себе) ничего не говорит — не показываем */}
+                          <span className="small muted">
+                            {item.qty != null ? formatAmount(item.qty, item.unit) : ''}
+                          </span>
                           {item.cost != null && (
                             <span className="small muted" style={{ width: 56, textAlign: 'right' }}>
                               {formatMoney(item.cost, db.settings.currency)}

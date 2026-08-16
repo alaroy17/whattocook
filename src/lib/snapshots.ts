@@ -32,11 +32,30 @@ export async function ensureDailySnapshot(db: Database): Promise<void> {
   })
   localStorage.setItem(LAST_SNAPSHOT_KEY, date)
 
-  // Старые копии убираем, чтобы папка не росла бесконечно. Только что созданная
-  // тоже занимает слот, поэтому от прежних оставляем на одну меньше.
-  const stale = existing.sort((a, b) => b.date.localeCompare(a.date)).slice(KEEP - 1)
-  for (const snapshot of stale) {
-    await drive.deleteFile(snapshot.id).catch(() => {})
+  /*
+   * Два телефона могли пройти проверку одновременно и создать по копии за один день.
+   * Схлопываем детерминированно: выживает копия с меньшим id, лишние удаляются —
+   * оба устройства придут к одному и тому же набору.
+   */
+  const after = await drive.listSnapshots().catch(() => [] as drive.SnapshotMeta[])
+  const byDate = new Map<string, drive.SnapshotMeta[]>()
+  for (const snapshot of after) {
+    const list = byDate.get(snapshot.date) ?? []
+    list.push(snapshot)
+    byDate.set(snapshot.date, list)
+  }
+  for (const list of byDate.values()) {
+    if (list.length < 2) continue
+    const extras = [...list].sort((a, b) => a.id.localeCompare(b.id)).slice(1)
+    for (const extra of extras) await drive.deleteFile(extra.id).catch(() => {})
+  }
+
+  // Старые копии убираем, чтобы папка не росла бесконечно.
+  const kept = [...byDate.keys()].sort().reverse()
+  for (const oldDate of kept.slice(KEEP)) {
+    for (const snapshot of byDate.get(oldDate) ?? []) {
+      await drive.deleteFile(snapshot.id).catch(() => {})
+    }
   }
 }
 

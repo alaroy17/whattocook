@@ -36,6 +36,16 @@ function normalizeUnit(raw: string): string | null {
 }
 
 const NUMBER = String.raw`\d+(?:[.,]\d+)?`
+/** Количество бывает диапазоном: «2-3 шт». Берём нижнюю границу. */
+const NUMBER_RANGE = String.raw`\d+(?:[.,]\d+)?(?:\s*[-–—]\s*\d+(?:[.,]\d+)?)?`
+
+function firstNumber(range: string): number {
+  const match = range.match(new RegExp(NUMBER))
+  return Number((match?.[0] ?? range).replace(',', '.'))
+}
+
+/** Пометки, которые пишут через запятую: «Соль, по вкусу». */
+const COMMA_NOTES = /,\s*(по вкусу|по желанию|опционально|для подачи|для украшения)\s*$/i
 
 export function parseIngredientLine(line: string): RecipeIngredient | null {
   /*
@@ -52,19 +62,26 @@ export function parseIngredientLine(line: string): RecipeIngredient | null {
     note = noteMatch[1].trim()
     rest = rest.slice(0, noteMatch.index).trim()
   }
+  const commaNote = rest.match(COMMA_NOTES)
+  if (commaNote) {
+    note = note ? `${commaNote[1]}, ${note}` : commaNote[1]
+    rest = rest.slice(0, commaNote.index).trim()
+  }
 
   let qty: number | null = null
   let unit = ''
 
   const take = (value: string, measure: string | null) => {
-    qty = Number(value.replace(',', '.'))
+    qty = firstNumber(value)
     unit = measure ?? ''
   }
 
-  // «Мука — 200 г» / «Мука 200 г» / «Мука 2»
-  const trailing = rest.match(new RegExp(String.raw`^(.*?)[\s,—–-]*(${NUMBER})\s*([а-яёa-z.]*)\s*$`, 'i'))
+  // «Мука — 200 г» / «Мука 200 г» / «Яйца 2-3 шт»
+  const trailing = rest.match(
+    new RegExp(String.raw`^(.*?)[\s,—–]*(${NUMBER_RANGE})\s*([а-яёa-z.]*)\s*$`, 'i'),
+  )
   // «200 г муки» / «2 шт помидоры»
-  const leading = rest.match(new RegExp(String.raw`^(${NUMBER})\s*([а-яёa-z.]*)\s+(.+)$`, 'i'))
+  const leading = rest.match(new RegExp(String.raw`^(${NUMBER_RANGE})\s*([а-яёa-z.]*)\s+(.+)$`, 'i'))
 
   if (trailing && trailing[1].trim()) {
     const measure = normalizeUnit(trailing[3])

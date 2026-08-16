@@ -276,6 +276,49 @@ export function alive<T extends Syncable>(collection: Record<string, T>): T[] {
 }
 
 /**
+ * Схлопывает дубли, возникшие при одновременном «Готовим сегодня» с двух телефонов:
+ * локальная защита от дублей не видит запись, которую второй человек создал офлайн.
+ *
+ * Трогаем только «голые» записи (без заметки, оценок, стоимости и порций) с одинаковыми
+ * датой, блюдом и приёмом пищи — всё, куда человек что-то вписал, остаётся как есть.
+ * Выбор выжившего детерминирован (готово важнее плана, затем меньший id), поэтому
+ * оба устройства схлопывают одинаково.
+ */
+export function dedupeQuickEntries(db: Database, at: string): Database {
+  const groups = new Map<string, Entry[]>()
+  for (const entry of Object.values(db.entries)) {
+    if (entry.deletedAt || !entry.recipeId) continue
+    const bare =
+      !entry.note &&
+      entry.cost == null &&
+      entry.servings == null &&
+      Object.keys(entry.ratings ?? {}).length === 0
+    if (!bare) continue
+    const key = `${entry.date}|${entry.recipeId}|${entry.meal}`
+    const list = groups.get(key) ?? []
+    list.push(entry)
+    groups.set(key, list)
+  }
+
+  let changed = false
+  const entries = { ...db.entries }
+  for (const list of groups.values()) {
+    if (list.length < 2) continue
+    const keep = [...list].sort((a, b) => {
+      if (a.status !== b.status) return a.status === 'done' ? -1 : 1
+      return a.id.localeCompare(b.id)
+    })[0]
+    for (const extra of list) {
+      if (extra.id === keep.id) continue
+      entries[extra.id] = { ...extra, deletedAt: at, updatedAt: at }
+      changed = true
+    }
+  }
+
+  return changed ? { ...db, entries } : db
+}
+
+/**
  * Убирает надгробия: старше срока хранения либо попавшие под ручную очистку корзины.
  *
  * Очистка помечается временем в `settings.purgedAt`. Без такой отметки удалённые записи

@@ -97,14 +97,16 @@ function normalizeIngredient(raw: unknown): RecipeIngredient | null {
   const name = String(item.name ?? '').trim()
   if (!name) return null
 
-  const unit = String(item.unit ?? '').trim()
-  const known = (UNITS as readonly string[]).includes(unit) ? unit : ''
-  const note = String(item.note ?? '').trim()
+  const rawUnit = String(item.unit ?? '').trim()
+  const known = (UNITS as readonly string[]).includes(rawUnit)
+  let note = String(item.note ?? '').trim()
+  // Незнакомую единицу не выбрасываем молча — она остаётся в пометке.
+  if (!known && rawUnit) note = note ? `${note}, ${rawUnit}` : rawUnit
 
   return {
     name,
     qty: asNumber(item.qty),
-    unit: known,
+    unit: known ? rawUnit : '',
     ...(note ? { note } : {}),
   }
 }

@@ -12,9 +12,17 @@ import {
   type UserId,
   USERS,
 } from '../types'
-import { loadLocal, mergeDatabases, normalizeDatabase, pruneTombstones, saveLocal, serialize } from './db'
+import {
+  dedupeQuickEntries,
+  loadLocal,
+  mergeDatabases,
+  normalizeDatabase,
+  pruneTombstones,
+  saveLocal,
+  serialize,
+} from './db'
 import * as drive from './drive'
-import { ensureDailySnapshot } from './snapshots'
+import { ensureDailySnapshot, restoreSnapshot } from './snapshots'
 import { listPendingPhotos, uploadPendingPhoto } from './photos'
 import { nowIso, uid } from './util'
 
@@ -49,6 +57,8 @@ interface StoreValue {
   syncNow: () => Promise<boolean>
   /** Создать базу на своём Диске — когда общей нет и её никто не откроет. */
   createDatabase: () => Promise<void>
+  /** Наложить копию из «Истории» на актуальное состояние. Возвращает число вернувшихся записей. */
+  restoreFromSnapshot: (snapshotId: string) => Promise<number>
   saveRecipe: (recipe: Partial<Recipe> & { id?: string }) => Recipe
   saveEntry: (entry: Partial<Entry> & { id?: string }) => Entry
   saveProduct: (product: Partial<Product> & { id?: string }) => Product
@@ -152,7 +162,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         for (let attempt = 0; attempt < 3; attempt++) {
           const remote = normalizeDatabase(await drive.downloadJson(file.id))
           // Локальную версию берём заново: пока шёл запрос, пользователь мог что-то поменять.
-          merged = pruneTombstones(mergeDatabases(dbRef.current, remote))
+          merged = pruneTombstones(dedupeQuickEntries(mergeDatabases(dbRef.current, remote), nowIso()))
           const mergedText = serialize(merged)
           if (mergedText === serialize(remote)) break
 
@@ -404,6 +414,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createDatabase: async () => {
         await drive.createDbFile(serialize(pruneTombstones(dbRef.current)))
         await runSyncRef.current(false)
+      },
+      restoreFromSnapshot: async (snapshotId) => {
+        /*
+         * База берётся в момент наложения, а не в момент нажатия кнопки:
+         * фоновая синхронизация могла успеть привезти правки, и снимок,
+         * наложенный на устаревшее состояние, затирал бы их.
+         */
+        const { db: restored, restored: count } = await restoreSnapshot(snapshotId, dbRef.current)
+        applyDb(restored)
+        schedulePushRef.current()
+        return count
       },
       saveRecipe: (patch) => {
         const id = patch.id ?? uid('r')

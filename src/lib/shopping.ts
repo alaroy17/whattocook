@@ -148,7 +148,7 @@ export function shoppingListToText(groups: { group: string; items: ShoppingItem[
   return groups
     .map(({ group, items }) => {
       const lines = items.map((item) => {
-        const amount = formatAmount(item.qty, item.unit)
+        const amount = item.qty != null ? formatAmount(item.qty, item.unit) : ''
         return `• ${item.name}${amount ? ` — ${amount}` : ''}`
       })
       return `${group}\n${lines.join('\n')}`

@@ -1,6 +1,12 @@
 // Разовая проверка логики слияния: запускается через esbuild-сборку src/lib/db.ts.
 // Не входит в приложение, нужна чтобы убедиться в поведении корзины и настроек.
-import { mergeDatabases, pruneTombstones, normalizeDatabase, serialize } from '../.check/db.mjs'
+import {
+  mergeDatabases,
+  pruneTombstones,
+  normalizeDatabase,
+  serialize,
+  dedupeQuickEntries,
+} from '../.check/db.mjs'
 
 let failed = 0
 const check = (name, condition) => {
@@ -186,5 +192,27 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   const merged = mergeDatabases(normalizeDatabase({}), db)
   check('слияние с пустой базой сохраняет рецепт', merged.recipes.r1?.name === 'Салат с рукколой')
 }
+
+// 7. Дубли одновременного «Готовим сегодня» с двух телефонов схлопываются.
+{
+  const db = normalizeDatabase({
+    entries: {
+      e1: { date: '2026-08-17', meal: 'dinner', status: 'planned', recipeId: 'r1', createdAt: '2026-08-17T10:00:00.000Z', updatedAt: '2026-08-17T10:00:00.000Z' },
+      e2: { date: '2026-08-17', meal: 'dinner', status: 'done', recipeId: 'r1', createdAt: '2026-08-17T10:00:01.000Z', updatedAt: '2026-08-17T10:00:01.000Z' },
+      // Запись с заметкой — не «голая», трогать нельзя.
+      e3: { date: '2026-08-17', meal: 'dinner', status: 'done', recipeId: 'r2', note: 'вкусно', createdAt: '2026-08-17T10:00:00.000Z', updatedAt: '2026-08-17T10:00:00.000Z' },
+      e4: { date: '2026-08-17', meal: 'dinner', status: 'planned', recipeId: 'r2', createdAt: '2026-08-17T10:00:02.000Z', updatedAt: '2026-08-17T10:00:02.000Z' },
+    },
+  })
+  const deduped = dedupeQuickEntries(db, '2026-08-17T11:00:00.000Z')
+  const aliveOnes = Object.values(deduped.entries).filter((e) => !e.deletedAt)
+  const r1 = aliveOnes.filter((e) => e.recipeId === 'r1')
+  check('дубль схлопнут, остался один', r1.length === 1)
+  check('выжила запись со статусом «готово»', r1[0]?.status === 'done')
+  check('записи с содержимым не тронуты', aliveOnes.filter((e) => e.recipeId === 'r2').length === 2)
+}
+
+// 8. Строки с диапазоном и запятой-пометкой (через полный normalizeDatabase не проверить —
+// это parseIngredientLine, он гоняется в check-ingredients).
 
 process.exit(failed === 0 ? 0 : 1)

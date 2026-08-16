@@ -75,7 +75,11 @@ export function scaleIngredient(ingredient: RecipeIngredient, multiplier: number
 function roundQty(value: number): number {
   if (value >= 100) return Math.round(value / 10) * 10
   if (value >= 10) return Math.round(value)
-  return Math.round(value * 2) / 2
+  const half = Math.round(value * 2) / 2
+  if (half > 0) return half
+  // Микроколичество не должно округляться в ноль: 0,2 ч.л. — это не «ничего».
+  const fine = Math.round(value * 100) / 100
+  return fine > 0 ? fine : value
 }
 
 /** Доля ингредиентов, которые уже есть дома. */

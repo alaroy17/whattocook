@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
-import { listSnapshots, restoreSnapshot } from '../lib/snapshots'
+import { listSnapshots } from '../lib/snapshots'
 import type { SnapshotMeta } from '../lib/drive'
 import { Confirm, Empty, toast } from '../components/ui'
 import { IconRefresh } from '../components/Icons'
@@ -10,7 +10,7 @@ import { alive } from '../lib/db'
 import { countOf } from '../lib/util'
 
 export function History() {
-  const { db, sync, replaceDatabase } = useStore()
+  const { db, sync, restoreFromSnapshot } = useStore()
   const [snapshots, setSnapshots] = useState<SnapshotMeta[] | null>(null)
   const [error, setError] = useState('')
   const [restoring, setRestoring] = useState<SnapshotMeta | null>(null)
@@ -102,9 +102,8 @@ export function History() {
           onCancel={() => setRestoring(null)}
           onConfirm={() => {
             setBusy(true)
-            void restoreSnapshot(restoring.id, db)
-              .then(({ db: restored, restored: count }) => {
-                replaceDatabase(restored)
+            void restoreFromSnapshot(restoring.id)
+              .then((count) => {
                 toast(count === 0 ? 'Всё на месте, возвращать нечего' : `Вернулось записей: ${count}`)
                 setRestoring(null)
               })
