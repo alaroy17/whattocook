@@ -5,10 +5,13 @@
 
 const CLIENT_ID_KEY = 'wtc.google.clientId'
 const FILE_ID_KEY = 'wtc.google.fileId'
-const FOLDER_ID_KEY = 'wtc.google.folderId'
+const ROOT_FOLDER_KEY = 'wtc.google.rootFolderId'
+const PHOTO_FOLDER_KEY = 'wtc.google.photoFolderId'
 
+/** Всё приложение живёт в одной папке на Диске, чтобы не мусорить в корне. */
+export const APP_FOLDER_NAME = 'Что готовим'
+export const PHOTO_FOLDER_NAME = 'Фото'
 export const DB_FILE_NAME = 'what-to-cook.json'
-export const PHOTO_FOLDER_NAME = 'WhatToCook — фото'
 const APP_TAG = 'what-to-cook'
 
 /**
@@ -43,6 +46,8 @@ declare global {
   }
 }
 
+const FOLDER_MIME = 'application/vnd.google-apps.folder'
+
 export class DriveError extends Error {
   constructor(message: string, readonly needsInteraction = false) {
     super(message)
@@ -71,7 +76,8 @@ function setSavedFileId(id: string): void {
 
 export function forgetFile(): void {
   localStorage.removeItem(FILE_ID_KEY)
-  localStorage.removeItem(FOLDER_ID_KEY)
+  localStorage.removeItem(ROOT_FOLDER_KEY)
+  localStorage.removeItem(PHOTO_FOLDER_KEY)
 }
 
 let gisReady: Promise<void> | null = null
@@ -240,7 +246,36 @@ export async function getFileMeta(fileId: string): Promise<DriveFileMeta> {
   return (await response.json()) as DriveFileMeta
 }
 
-/** Находит существующий файл базы или создаёт новый с начальным содержимым. */
+/** Создаёт папку и запоминает её id. */
+async function createFolder(name: string, kind: string, parent?: string): Promise<string> {
+  const response = await api('/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      name,
+      mimeType: FOLDER_MIME,
+      ...(parent ? { parents: [parent] } : {}),
+      appProperties: { app: APP_TAG, kind },
+    }),
+  })
+  const data = (await response.json()) as { id: string }
+  return data.id
+}
+
+/**
+ * Папка приложения на Диске. У второго пользователя своя не создаётся:
+ * поиск по appProperties находит папку, которой с ним поделились.
+ */
+export async function resolveAppFolder(): Promise<string> {
+  const saved = localStorage.getItem(ROOT_FOLDER_KEY)
+  if (saved) return saved
+  const found = (await findByAppTag('root', FOLDER_MIME)) ?? (await findFolderByName(APP_FOLDER_NAME))
+  const id = found ? found.id : await createFolder(APP_FOLDER_NAME, 'root')
+  localStorage.setItem(ROOT_FOLDER_KEY, id)
+  return id
+}
+
+/** Находит существующий файл базы или создаёт новый внутри папки приложения. */
 export async function resolveDbFile(initialContent: string): Promise<DriveFileMeta> {
   const saved = getSavedFileId()
   if (saved) {
@@ -255,18 +290,24 @@ export async function resolveDbFile(initialContent: string): Promise<DriveFileMe
     setSavedFileId(found.id)
     return found
   }
-  const created = await createJsonFile(DB_FILE_NAME, initialContent)
+  const created = await createJsonFile(DB_FILE_NAME, initialContent, await resolveAppFolder())
   setSavedFileId(created.id)
   return created
 }
 
-async function findByName(name: string): Promise<DriveFileMeta | null> {
-  const query = encodeURIComponent(`name='${name}' and trashed=false`)
+async function findByName(name: string, mimeType?: string): Promise<DriveFileMeta | null> {
+  const clauses = [`name='${name}'`, 'trashed=false']
+  if (mimeType) clauses.push(`mimeType='${mimeType}'`)
+  const query = encodeURIComponent(clauses.join(' and '))
   const response = await api(
     `/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,version)&orderBy=modifiedTime desc&pageSize=10`,
   )
   const data = (await response.json()) as { files?: DriveFileMeta[] }
   return data.files?.[0] ?? null
+}
+
+function findFolderByName(name: string): Promise<DriveFileMeta | null> {
+  return findByName(name, FOLDER_MIME)
 }
 
 function multipartBody(metadata: object, contentType: string, body: Blob | string) {
@@ -281,9 +322,14 @@ function multipartBody(metadata: object, contentType: string, body: Blob | strin
   return blob
 }
 
-async function createJsonFile(name: string, content: string): Promise<DriveFileMeta> {
+async function createJsonFile(name: string, content: string, parent: string): Promise<DriveFileMeta> {
   const body = multipartBody(
-    { name, mimeType: 'application/json', appProperties: { app: APP_TAG, kind: 'db' } },
+    {
+      name,
+      mimeType: 'application/json',
+      parents: [parent],
+      appProperties: { app: APP_TAG, kind: 'db' },
+    },
     'application/json',
     content,
   )
@@ -309,27 +355,14 @@ export async function uploadJson(fileId: string, content: string): Promise<Drive
   return (await response.json()) as DriveFileMeta
 }
 
-/** Папка для фотографий: создаётся один раз и запоминается. */
+/** Подпапка для фотографий внутри папки приложения. */
 async function resolvePhotoFolder(): Promise<string> {
-  const saved = localStorage.getItem(FOLDER_ID_KEY)
+  const saved = localStorage.getItem(PHOTO_FOLDER_KEY)
   if (saved) return saved
-  const found = await findByAppTag('photos', 'application/vnd.google-apps.folder')
-  if (found) {
-    localStorage.setItem(FOLDER_ID_KEY, found.id)
-    return found.id
-  }
-  const response = await api('/drive/v3/files?fields=id', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: PHOTO_FOLDER_NAME,
-      mimeType: 'application/vnd.google-apps.folder',
-      appProperties: { app: APP_TAG, kind: 'photos' },
-    }),
-  })
-  const data = (await response.json()) as { id: string }
-  localStorage.setItem(FOLDER_ID_KEY, data.id)
-  return data.id
+  const found = await findByAppTag('photos', FOLDER_MIME)
+  const id = found ? found.id : await createFolder(PHOTO_FOLDER_NAME, 'photos', await resolveAppFolder())
+  localStorage.setItem(PHOTO_FOLDER_KEY, id)
+  return id
 }
 
 export async function uploadPhoto(blob: Blob, name: string): Promise<string> {
@@ -356,14 +389,34 @@ export async function deleteFile(fileId: string): Promise<void> {
   await api(`/drive/v3/files/${fileId}`, { method: 'DELETE' })
 }
 
-/** Открыть доступ к базе и папке с фото второму человеку. */
+/**
+ * Открыть доступ второму человеку. Делимся папкой целиком — база и фотографии
+ * лежат внутри, так что отдельно раздавать права на них не нужно.
+ */
 export async function shareWith(email: string): Promise<void> {
-  const targets = [getSavedFileId(), localStorage.getItem(FOLDER_ID_KEY)].filter(Boolean) as string[]
+  const folder = await resolveAppFolder()
+  const targets = new Set<string>([folder])
+  // Если файл базы почему-то оказался вне папки (например, остался от ранней версии) — делимся и им.
+  const dbId = getSavedFileId()
+  if (dbId) {
+    const parents = await getParents(dbId)
+    if (!parents.includes(folder)) targets.add(dbId)
+  }
   for (const fileId of targets) {
     await api(`/drive/v3/files/${fileId}/permissions?sendNotificationEmail=true`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: 'writer', type: 'user', emailAddress: email.trim() }),
     })
+  }
+}
+
+async function getParents(fileId: string): Promise<string[]> {
+  try {
+    const response = await api(`/drive/v3/files/${fileId}?fields=parents`)
+    const data = (await response.json()) as { parents?: string[] }
+    return data.parents ?? []
+  } catch {
+    return []
   }
 }

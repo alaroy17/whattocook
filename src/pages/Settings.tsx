@@ -223,7 +223,10 @@ export function SettingsPage() {
             {connected && (
               <>
                 <div className="divider" />
-                <Field label="Открыть доступ второму человеку" hint="Пришлём приглашение на его Google-почту">
+                <Field
+                  label="Открыть доступ второму человеку"
+                  hint={`Поделимся папкой «${drive.APP_FOLDER_NAME}» целиком и пришлём приглашение на его Google-почту`}
+                >
                   <div className="row">
                     <input
                       className="input grow"
@@ -375,8 +378,10 @@ export function SettingsPage() {
           </div>
         </section>
 
-        <div className="small muted" style={{ textAlign: 'center', marginTop: 20 }}>
-          Файл базы: {drive.DB_FILE_NAME}
+        <div className="small muted" style={{ textAlign: 'center', marginTop: 20, lineHeight: 1.6 }}>
+          На Диске: папка «{drive.APP_FOLDER_NAME}»
+          <br />
+          {drive.DB_FILE_NAME} и подпапка «{drive.PHOTO_FOLDER_NAME}»
         </div>
       </main>
 
