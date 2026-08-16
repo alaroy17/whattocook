@@ -6,7 +6,8 @@ import { scoreRecipes, type SuggestFilters } from '../lib/suggest'
 import { RecipeRow } from '../components/RecipeRow'
 import { Chips, Empty, SearchInput, Sheet, UserPicker } from '../components/ui'
 import { RecipeEditor } from '../components/RecipeEditor'
-import { IconFilter, IconPlus } from '../components/Icons'
+import { RecipeImport } from '../components/RecipeImport'
+import { IconFilter, IconImport, IconPlus } from '../components/Icons'
 import { buildProductIndex, recipeCost } from '../lib/cost'
 import { alive } from '../lib/db'
 import { classNames, formatMoney } from '../lib/util'
@@ -38,6 +39,7 @@ export function Recipes() {
   const [extra, setExtra] = useState<Extra>(NO_EXTRA)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   const index = useMemo(() => buildProductIndex(alive(db.products)), [db.products])
   const categories = useMemo(() => categoriesWithRecipes(db), [db])
@@ -85,7 +87,15 @@ export function Recipes() {
 
   return (
     <>
-      <TopBar title="Рецепты" subtitle={`${total} блюд в базе`} />
+      <TopBar
+        title="Рецепты"
+        subtitle={`${total} блюд в базе`}
+        actions={
+          <button className="icon-btn" onClick={() => setImporting(true)} aria-label="Импорт рецепта">
+            <IconImport />
+          </button>
+        }
+      />
       <main className="content">
         <SearchInput value={search} onChange={setSearch} placeholder="Блюдо, продукт или тег" />
 
@@ -129,9 +139,14 @@ export function Recipes() {
               }
               action={
                 total === 0 ? (
-                  <button className="btn btn-primary" onClick={() => setCreating(true)}>
-                    <IconPlus size={16} /> Добавить блюдо
-                  </button>
+                  <div className="stack">
+                    <button className="btn btn-primary" onClick={() => setCreating(true)}>
+                      <IconPlus size={16} /> Добавить блюдо
+                    </button>
+                    <button className="btn" onClick={() => setImporting(true)}>
+                      <IconImport size={16} /> Импорт через чат-бот
+                    </button>
+                  </div>
                 ) : (
                   <button
                     className="btn"
@@ -233,6 +248,7 @@ export function Recipes() {
       )}
 
       {creating && <RecipeEditor onClose={() => setCreating(false)} />}
+      {importing && <RecipeImport onClose={() => setImporting(false)} />}
     </>
   )
 }

@@ -1233,9 +1233,24 @@ select.plain {
 
 .ingredient-row {
   display: grid;
-  grid-template-columns: 1fr 62px 76px 32px;
+  grid-template-columns: 1fr 58px 78px 34px;
   gap: 6px;
   align-items: center;
+}
+
+.prompt-preview {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+  color: var(--text-2);
 }
 
 .steps {

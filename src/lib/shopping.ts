@@ -1,6 +1,6 @@
 import type { Recipe } from '../types'
 import { type ProductIndex, ingredientCost } from './cost'
-import { normalizeName } from './util'
+import { formatAmount, normalizeName } from './util'
 
 export interface ShoppingItem {
   key: string
@@ -129,8 +129,8 @@ export function shoppingListToText(groups: { group: string; items: ShoppingItem[
   return groups
     .map(({ group, items }) => {
       const lines = items.map((item) => {
-        const amount = item.qty == null ? '' : ` — ${item.qty} ${item.unit}`
-        return `• ${item.name}${amount}`
+        const amount = formatAmount(item.qty, item.unit)
+        return `• ${item.name}${amount ? ` — ${amount}` : ''}`
       })
       return `${group}\n${lines.join('\n')}`
     })

@@ -82,7 +82,23 @@ export const PRODUCT_GROUPS = [
 ] as const
 export type ProductGroup = (typeof PRODUCT_GROUPS)[number]
 
-export const UNITS = ['г', 'кг', 'мл', 'л', 'шт', 'ст.л.', 'ч.л.', 'стак.', 'пучок', 'зуб.', 'щеп.'] as const
+/** Пустая строка — единица не указана: «просто помидоры», без количества. */
+export const UNITS = [
+  '',
+  'г',
+  'кг',
+  'мл',
+  'л',
+  'шт',
+  'упак.',
+  'банка',
+  'ст.л.',
+  'ч.л.',
+  'стак.',
+  'пучок',
+  'зуб.',
+  'щеп.',
+] as const
 
 /** Общие поля всех сущностей: нужны для слияния изменений двух устройств. */
 export interface Syncable {

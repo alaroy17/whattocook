@@ -54,6 +54,17 @@ export function formatQty(qty: number | null | undefined): string {
   return rounded.toLocaleString('ru-RU')
 }
 
+/**
+ * Количество с единицей. И то и другое необязательно: рецепт можно записать
+ * просто списком продуктов, без «столько грамм на столько порций».
+ */
+export function formatAmount(qty: number | null | undefined, unit: string | undefined): string {
+  const amount = formatQty(qty)
+  const measure = (unit ?? '').trim()
+  if (!amount) return measure
+  return measure ? `${amount} ${measure}` : amount
+}
+
 /** «3 дня», «21 день», «5 дней» */
 export function pluralRu(n: number, forms: [string, string, string]): string {
   const abs = Math.abs(n) % 100

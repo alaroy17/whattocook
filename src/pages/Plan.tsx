@@ -15,7 +15,7 @@ import {
   shoppingListToText,
 } from '../lib/shopping'
 import { buildProductIndex } from '../lib/cost'
-import { classNames, formatMoney } from '../lib/util'
+import { classNames, formatAmount, formatMoney } from '../lib/util'
 import { IconCart, IconCheck, IconChevronLeft, IconChevronRight, IconPlus } from '../components/Icons'
 
 type Tab = 'week' | 'shopping'
@@ -250,9 +250,7 @@ export function Plan() {
                             {item.name}
                             <div className="small muted ellipsis">{item.usedIn.join(', ')}</div>
                           </span>
-                          <span className="small muted">
-                            {item.qty != null ? `${item.qty} ${item.unit}` : ''}
-                          </span>
+                          <span className="small muted">{formatAmount(item.qty, item.unit)}</span>
                           {item.cost != null && (
                             <span className="small muted" style={{ width: 56, textAlign: 'right' }}>
                               {formatMoney(item.cost, db.settings.currency)}

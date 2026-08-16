@@ -245,6 +245,21 @@ export const IconPaw = (p: IconProps) => (
   </Base>
 )
 
+export const IconCopy = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M15 6.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h.5" />
+  </Base>
+)
+
+export const IconImport = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 3.5v10" />
+    <path d="m8.2 10 3.8 3.8L15.8 10" />
+    <path d="M4.5 15.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" />
+  </Base>
+)
+
 export const IconFilter = (p: IconProps) => (
   <Base {...p}>
     <path d="M4 6.5h16L14 13v5.5l-4 2V13z" />

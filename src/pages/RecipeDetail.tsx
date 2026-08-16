@@ -10,7 +10,7 @@ import { EntryEditor } from '../components/EntryEditor'
 import { buildProductIndex, ingredientCost, recipeCost } from '../lib/cost'
 import { buildHistory, daysSince, guessMeal } from '../lib/suggest'
 import { formatDate, today } from '../lib/date'
-import { daysWord, formatMoney, formatQty, normalizeName, safeUrl, timesWord } from '../lib/util'
+import { daysWord, formatAmount, formatMoney, normalizeName, safeUrl, timesWord } from '../lib/util'
 import { IconCheck, IconEdit, IconHeart, IconPhoto, IconTrash, IconUsers } from '../components/Icons'
 import { MEAL_SLOTS, USERS, userName, type Recipe } from '../types'
 import { uploadRecipePhoto } from '../lib/photos'
@@ -222,9 +222,7 @@ export function RecipeDetail() {
                       {ingredient.name}
                       {ingredient.note && <span className="small muted"> · {ingredient.note}</span>}
                     </span>
-                    <span className="small muted">
-                      {formatQty(ingredient.qty)} {ingredient.qty != null ? ingredient.unit : ''}
-                    </span>
+                    <span className="small muted">{formatAmount(ingredient.qty, ingredient.unit)}</span>
                     {price != null && (
                       <span className="small muted" style={{ width: 58, textAlign: 'right' }}>
                         {formatMoney(price, db.settings.currency)}

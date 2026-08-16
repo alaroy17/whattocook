@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { UNITS, type Chef, type Recipe, type RecipeIngredient } from '../types'
 import { categoryOptions } from '../lib/categories'
 import { safeUrl } from '../lib/util'
+import { ingredientsToText, parseIngredientList } from '../lib/ingredientText'
 import { useStore } from '../lib/store'
 import { Field, Sheet, UserPicker, toast } from './ui'
 import { IconPhoto, IconPlus, IconTrash } from './Icons'
@@ -9,7 +10,8 @@ import { discardPhoto, uploadRecipePhoto } from '../lib/photos'
 import { Thumb } from './RecipeRow'
 import * as drive from '../lib/drive'
 
-const EMPTY_INGREDIENT: RecipeIngredient = { name: '', qty: null, unit: 'г' }
+// Единица пустая по умолчанию: «столько грамм на столько порций» — необязательная точность.
+const EMPTY_INGREDIENT: RecipeIngredient = { name: '', qty: null, unit: '' }
 
 export function RecipeEditor({
   recipe,
@@ -40,6 +42,8 @@ export function RecipeEditor({
   const [ingredients, setIngredients] = useState<RecipeIngredient[]>(
     recipe?.ingredients?.length ? recipe.ingredients : [{ ...EMPTY_INGREDIENT }],
   )
+  const [mode, setMode] = useState<'rows' | 'text'>('rows')
+  const [draftText, setDraftText] = useState('')
 
   /** Подсказки названий продуктов из каталога и других рецептов. */
   const suggestions = useMemo(() => {
@@ -190,13 +194,48 @@ export function RecipeEditor({
         </div>
 
         <div className="field">
-          <label>Ингредиенты</label>
-          <datalist id="product-names">
-            {suggestions.map((item) => (
-              <option key={item} value={item} />
-            ))}
-          </datalist>
-          <div className="stack" style={{ gap: 6 }}>
+          <div className="row-between">
+            <label>Ингредиенты</label>
+            <div className="segmented">
+              <button className={mode === 'rows' ? 'active' : ''} onClick={() => setMode('rows')}>
+                Полями
+              </button>
+              <button
+                className={mode === 'text' ? 'active' : ''}
+                onClick={() => {
+                  setDraftText(ingredientsToText(ingredients))
+                  setMode('text')
+                }}
+              >
+                Списком
+              </button>
+            </div>
+          </div>
+
+          {mode === 'text' ? (
+            <>
+              <textarea
+                className="input"
+                style={{ minHeight: 150 }}
+                placeholder={'Помидоры\nМоцарелла — 200 г\nОливковое масло (по вкусу)'}
+                value={draftText}
+                onChange={(event) => {
+                  setDraftText(event.target.value)
+                  setIngredients(parseIngredientList(event.target.value))
+                }}
+              />
+              <div className="small muted">
+                По продукту в строке. Количество можно не писать — «Помидоры» тоже подойдёт.
+              </div>
+            </>
+          ) : (
+            <>
+              <datalist id="product-names">
+                {suggestions.map((item) => (
+                  <option key={item} value={item} />
+                ))}
+              </datalist>
+              <div className="stack" style={{ gap: 6 }}>
             {ingredients.map((ingredient, index) => (
               <div className="ingredient-row" key={index}>
                 <input
@@ -222,7 +261,9 @@ export function RecipeEditor({
                   onChange={(e) => setIngredient(index, { unit: e.target.value })}
                 >
                   {UNITS.map((unit) => (
-                    <option key={unit}>{unit}</option>
+                    <option key={unit || 'none'} value={unit}>
+                      {unit || '—'}
+                    </option>
                   ))}
                 </select>
                 <button
@@ -234,14 +275,19 @@ export function RecipeEditor({
                 </button>
               </div>
             ))}
-          </div>
-          <button
-            className="btn btn-sm"
-            style={{ alignSelf: 'flex-start', marginTop: 6 }}
-            onClick={() => setIngredients((list) => [...list, { ...EMPTY_INGREDIENT }])}
-          >
-            <IconPlus size={15} /> Ингредиент
-          </button>
+              </div>
+              <button
+                className="btn btn-sm"
+                style={{ alignSelf: 'flex-start', marginTop: 6 }}
+                onClick={() => setIngredients((list) => [...list, { ...EMPTY_INGREDIENT }])}
+              >
+                <IconPlus size={15} /> Ингредиент
+              </button>
+              <div className="small muted" style={{ marginTop: 6 }}>
+                Количество и единица необязательны
+              </div>
+            </>
+          )}
         </div>
 
         <Field label="Как готовить">
