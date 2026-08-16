@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import * as drive from '../lib/drive'
-import { Confirm, Field, Segmented, toast } from '../components/ui'
-import { CATEGORIES, emptyDatabase } from '../types'
+import { Avatar, Confirm, Field, Segmented, toast } from '../components/ui'
+import { CATEGORIES, emptyDatabase, USERS } from '../types'
 import { alive, mergeDatabases, normalizeDatabase, serialize } from '../lib/db'
 import { uniqueCategories } from '../lib/categories'
 import { buildSeedDatabase } from '../lib/seed'
@@ -111,10 +111,12 @@ export function SettingsPage() {
   const [clientId, setClientIdValue] = useState(drive.getClientId())
   const [shareEmail, setShareEmail] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [showHelp, setShowHelp] = useState(!drive.getClientId())
 
   const connected = sync.status === 'idle' || sync.status === 'syncing'
+  const shared = db.settings.sharedWith ?? []
 
   const doConnect = async () => {
     drive.setClientId(clientId)
@@ -182,51 +184,98 @@ export function SettingsPage() {
               </div>
             )}
 
-            {showHelp && (
-              <div className="small muted" style={{ marginTop: 10, lineHeight: 1.6 }}>
-                1. Откройте <a href={HELP_URL} target="_blank" rel="noreferrer">Google Cloud Console</a> и создайте проект.
-                <br />
-                2. Включите Google Drive API.
-                <br />
-                3. В разделе «Credentials» создайте OAuth client ID типа Web application и добавьте адрес этого
-                сайта в Authorized JavaScript origins.
-                <br />
-                4. На экране согласия выберите тип External, добавьте оба ваших Google-адреса в Test users и
-                область доступа <code>.../auth/drive</code>.
-                <br />
-                5. Скопируйте Client ID сюда.
-              </div>
+            {/* Инструкция нужна ровно один раз — пока Client ID не введён. */}
+            {!connected && (
+              <>
+                {showHelp && (
+                  <div className="small muted" style={{ marginTop: 10, lineHeight: 1.6 }}>
+                    1. Откройте <a href={HELP_URL} target="_blank" rel="noreferrer">Google Cloud Console</a> и создайте
+                    проект, включите Google Drive API.
+                    <br />
+                    2. <b>Audience</b>: тип External, обе ваши почты в Test users.
+                    <br />
+                    3. <b>Data access</b>: добавьте области <code>.../auth/drive</code> и{' '}
+                    <code>.../auth/userinfo.email</code>.
+                    <br />
+                    4. <b>Clients</b> → Web application, в Authorized JavaScript origins — адрес этого сайта.
+                    <br />
+                    5. Скопируйте Client ID сюда.
+                  </div>
+                )}
+
+                <div style={{ marginTop: 12 }}>
+                  <Field label="Client ID" hint="Заканчивается на .apps.googleusercontent.com">
+                    <input
+                      className="input"
+                      value={clientId}
+                      onChange={(event) => setClientIdValue(event.target.value)}
+                      placeholder="1234567890-abc.apps.googleusercontent.com"
+                    />
+                  </Field>
+                </div>
+              </>
             )}
 
-            <div style={{ marginTop: 12 }}>
-              <Field label="Client ID" hint="Заканчивается на .apps.googleusercontent.com">
-                <input
-                  className="input"
-                  value={clientId}
-                  onChange={(event) => setClientIdValue(event.target.value)}
-                  placeholder="1234567890-abc.apps.googleusercontent.com"
-                />
-              </Field>
-            </div>
-
             <div className="row" style={{ marginTop: 10 }}>
-              <button className="btn btn-primary grow" disabled={busy || !clientId.trim()} onClick={() => void doConnect()}>
-                {connected ? 'Переподключить' : 'Подключить'}
-              </button>
-              {connected && (
-                <button className="btn" onClick={() => void syncNow()}>
-                  <IconRefresh size={16} /> Обновить
+              {connected ? (
+                <button className="btn grow" onClick={() => void syncNow()}>
+                  <IconRefresh size={16} /> Синхронизировать
+                </button>
+              ) : (
+                <button
+                  className="btn btn-primary grow"
+                  disabled={busy || !clientId.trim()}
+                  onClick={() => void doConnect()}
+                >
+                  Подключить
                 </button>
               )}
             </div>
+          </div>
 
-            {connected && (
-              <>
-                <div className="divider" />
-                <Field
-                  label="Открыть доступ второму человеку"
-                  hint={`Поделимся папкой «${drive.APP_FOLDER_NAME}» целиком и пришлём приглашение на его Google-почту`}
-                >
+          {connected && (
+            <div className="card">
+              <div className="row-between" style={{ marginBottom: 4 }}>
+                <strong style={{ fontSize: 14 }}>Кто пользуется</strong>
+              </div>
+              {USERS.map((user) => {
+                const bound = db.settings.userEmails?.[user.id]
+                return (
+                  <div className="cat-row" key={user.id}>
+                    <Avatar id={user.id} />
+                    <span className="grow">
+                      {user.name}
+                      <div className="small muted ellipsis">{bound ?? 'аккаунт ещё не привязан'}</div>
+                    </span>
+                    {bound && bound === sync.email && <span className="badge badge-accent">это вы</span>}
+                  </div>
+                )
+              })}
+              <div className="small muted" style={{ marginTop: 8 }}>
+                Привязка происходит сама при первом входе с нового аккаунта
+              </div>
+
+              <div className="divider" />
+
+              <strong style={{ fontSize: 14 }}>Доступ к папке «{drive.APP_FOLDER_NAME}»</strong>
+              {shared.length === 0 ? (
+                <div className="small muted" style={{ marginTop: 6 }}>
+                  Пока только у вас
+                </div>
+              ) : (
+                <div style={{ marginTop: 6 }}>
+                  {shared.map((email) => (
+                    <div className="cat-row" key={email}>
+                      <IconCheck size={16} style={{ color: 'var(--good)' }} />
+                      <span className="grow ellipsis">{email}</span>
+                      <span className="small muted">приглашение отправлено</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ marginTop: 10 }}>
+                <Field label="Пригласить" hint="Придёт письмо со ссылкой на общую папку">
                   <div className="row">
                     <input
                       className="input grow"
@@ -236,29 +285,57 @@ export function SettingsPage() {
                     />
                     <button
                       className="btn"
-                      disabled={!shareEmail.includes('@')}
+                      disabled={!shareEmail.includes('@') || sharing}
                       onClick={() => {
+                        const email = shareEmail.trim()
+                        setSharing(true)
                         void drive
-                          .shareWith(shareEmail)
+                          .shareWith(email)
                           .then(() => {
-                            toast('Доступ открыт')
+                            updateSettings({ sharedWith: [...new Set([...shared, email])] })
+                            toast('Доступ открыт, приглашение отправлено')
                             setShareEmail('')
                           })
                           .catch((error: unknown) =>
                             toast(error instanceof Error ? error.message : 'Не удалось открыть доступ'),
                           )
+                          .finally(() => setSharing(false))
                       }}
                     >
                       <IconCheck size={16} />
                     </button>
                   </div>
                 </Field>
-                <button className="btn btn-block" style={{ marginTop: 10 }} onClick={disconnect}>
-                  Отключить аккаунт
-                </button>
-              </>
-            )}
-          </div>
+              </div>
+
+              <div className="divider" />
+              <button className="btn btn-block" onClick={() => setShowHelp((value) => !value)}>
+                {showHelp ? 'Скрыть Client ID' : 'Изменить Client ID'}
+              </button>
+              {showHelp && (
+                <div style={{ marginTop: 10 }}>
+                  <Field label="Client ID">
+                    <input
+                      className="input"
+                      value={clientId}
+                      onChange={(event) => setClientIdValue(event.target.value)}
+                    />
+                  </Field>
+                  <button
+                    className="btn btn-block"
+                    style={{ marginTop: 8 }}
+                    disabled={busy || !clientId.trim()}
+                    onClick={() => void doConnect()}
+                  >
+                    Переподключить
+                  </button>
+                </div>
+              )}
+              <button className="btn btn-block" style={{ marginTop: 8 }} onClick={disconnect}>
+                Отключить аккаунт
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="section">

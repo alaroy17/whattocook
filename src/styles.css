@@ -986,6 +986,27 @@ textarea.input {
 
 .divider { height: 1px; background: var(--border); margin: 12px 0; }
 
+/* Плашка «вышло обновление» — над таб-баром, ничего не перекрывает */
+.update-bar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px 9px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow);
+  font-size: 13.5px;
+  max-width: 656px;
+  margin: 0 auto;
+  animation: slide 0.2s ease;
+}
+
 /* Панель фильтров: одна строка вместо россыпи «пузырьков» */
 .filter-bar {
   display: flex;

@@ -4,13 +4,13 @@ const PRECACHE = "__PRECACHE__"
 const BASE = '__BASE__'
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
-      .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting()),
-  )
+  // Новая версия скачивается в свой кэш и ждёт: страница сама решит, когда переключиться,
+  // чтобы не менять код под работающим приложением.
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)))
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {

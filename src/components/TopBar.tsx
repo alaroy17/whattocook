@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../lib/store'
 import { IconChevronLeft } from './Icons'
+import { Avatar } from './ui'
 import { classNames } from '../lib/util'
 import { USERS } from '../types'
 
@@ -27,7 +28,8 @@ export function TopBar({
   showUser?: boolean
 }) {
   const navigate = useNavigate()
-  const { me, setMe, sync } = useStore()
+  const { me, setMe, sync, identityLocked } = useStore()
+  const name = USERS.find((user) => user.id === me)?.name
 
   return (
     <header className="topbar">
@@ -47,15 +49,23 @@ export function TopBar({
         )}
       </h1>
       {actions}
-      {showUser && (
-        <button
-          className="chip"
-          onClick={() => setMe(me === 'sasha' ? 'andrei' : 'sasha')}
-          title="Кто сейчас пользуется приложением"
-        >
-          {USERS.find((u) => u.id === me)?.name}
-        </button>
-      )}
+      {showUser &&
+        (identityLocked ? (
+          // Аккаунт Google уже сказал, кто это, — менять нечего.
+          <span className="chip chip-user" title={sync.email ?? undefined}>
+            <Avatar id={me} />
+            {name}
+          </span>
+        ) : (
+          <button
+            className="chip chip-user"
+            onClick={() => setMe(me === 'sasha' ? 'andrei' : 'sasha')}
+            title="Кто сейчас пользуется приложением"
+          >
+            <Avatar id={me} />
+            {name}
+          </button>
+        ))}
     </header>
   )
 }

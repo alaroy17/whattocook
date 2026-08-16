@@ -10,6 +10,7 @@ import {
   type Settings,
   type Syncable,
   type UserId,
+  USERS,
 } from '../types'
 import { loadLocal, mergeDatabases, normalizeDatabase, pruneTombstones, saveLocal, serialize } from './db'
 import * as drive from './drive'
@@ -26,8 +27,13 @@ interface SyncState {
 
 interface StoreValue {
   db: Database
+  /** Кто сейчас пользуется приложением. Если подключён Google — определяется по почте. */
   me: UserId
   setMe: (id: UserId) => void
+  /** Аккаунт Google привязан к одному из нас: переключать вручную нельзя и не нужно. */
+  identityLocked: boolean
+  /** Вошли в Google, но неизвестно, кто это, — надо спросить один раз. */
+  needsIdentity: boolean
   sync: SyncState
   connect: () => Promise<void>
   disconnect: () => void
@@ -58,7 +64,7 @@ function stamp<T extends Syncable>(existing: T | undefined, patch: Partial<T>, i
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Database>(() => loadLocal() ?? emptyDatabase())
-  const [me, setMeState] = useState<UserId>(() => (localStorage.getItem(ME_KEY) as UserId) || 'andrei')
+  const [localMe, setLocalMe] = useState<UserId>(() => (localStorage.getItem(ME_KEY) as UserId) || 'andrei')
   const [sync, setSync] = useState<SyncState>({
     status: drive.getClientId() ? 'offline' : 'unconfigured',
     message: '',
@@ -170,16 +176,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  /** Аккаунт, под которым вошли, сопоставляем с Сашей или Андреем. */
+  const boundUser = useMemo<UserId | null>(() => {
+    const email = sync.email?.trim().toLowerCase()
+    if (!email) return null
+    const map = db.settings.userEmails ?? {}
+    return USERS.find((user) => map[user.id]?.trim().toLowerCase() === email)?.id ?? null
+  }, [sync.email, db.settings.userEmails])
+
+  const me = boundUser ?? localMe
+  const needsIdentity = Boolean(sync.email) && !boundUser
+
   const value = useMemo<StoreValue>(() => {
     const setMe = (id: UserId) => {
       localStorage.setItem(ME_KEY, id)
-      setMeState(id)
+      setLocalMe(id)
+      // Если мы вошли в Google — запоминаем, что этот аккаунт принадлежит этому человеку.
+      const email = sync.email?.trim()
+      if (!email) return
+      mutate((draft) => {
+        const map: Partial<Record<UserId, string>> = { ...draft.settings.userEmails }
+        for (const user of USERS) {
+          if (map[user.id]?.trim().toLowerCase() === email.toLowerCase()) delete map[user.id]
+        }
+        map[id] = email
+        draft.settings = { ...draft.settings, userEmails: map }
+        draft.settingsUpdatedAt = nowIso()
+      })
     }
 
     return {
       db,
       me,
       setMe,
+      identityLocked: boundUser !== null,
+      needsIdentity,
       sync,
       connect: () => runSyncRef.current(true),
       disconnect: () => {
@@ -243,7 +274,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         schedulePush()
       },
     }
-  }, [db, me, sync, mutate, applyDb, schedulePush])
+  }, [db, me, boundUser, needsIdentity, sync, mutate, applyDb, schedulePush])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

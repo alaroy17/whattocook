@@ -2,17 +2,10 @@ import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
-import {
-  IconBook,
-  IconChart,
-  IconChevronRight,
-  IconCloud,
-  IconFridge,
-  IconSettings,
-  IconTag,
-} from '../components/Icons'
+import { IconBook, IconChart, IconChevronRight, IconCloud, IconSettings, IconTag } from '../components/Icons'
 import { USERS } from '../types'
 import { Avatar } from '../components/ui'
+import { classNames } from '../lib/util'
 
 function MenuRow({
   icon,
@@ -41,12 +34,12 @@ function MenuRow({
 
 export function More() {
   const navigate = useNavigate()
-  const { db, me, setMe, sync } = useStore()
+  const { db, me, setMe, sync, identityLocked } = useStore()
 
   const recipes = alive(db.recipes).length
   const entries = alive(db.entries).filter((entry) => entry.status === 'done').length
   const products = alive(db.products).length
-  const inStock = alive(db.products).filter((product) => product.inStock).length
+  const accountsBound = Object.values(db.settings.userEmails ?? {}).filter(Boolean).length
 
   return (
     <>
@@ -58,9 +51,8 @@ export function More() {
             {USERS.map((user) => (
               <button
                 key={user.id}
-                className={me === user.id ? 'chip active' : 'chip'}
+                className={classNames('chip', 'chip-user', `chip-${user.id}`, me === user.id && 'active')}
                 onClick={() => setMe(user.id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 7 }}
               >
                 <Avatar id={user.id} />
                 {user.name}
@@ -68,22 +60,19 @@ export function More() {
             ))}
           </div>
           <div className="small muted" style={{ marginTop: 8 }}>
-            От этого зависит, чьи заметки и оценки вы оставляете
+            {identityLocked && sync.email
+              ? `Аккаунт ${sync.email} закреплён за этим человеком — на другом устройстве с тем же входом вас узнают автоматически`
+              : 'От этого зависит, чьи заметки и оценки вы оставляете'}
           </div>
         </div>
 
-        <div className="card-flat" style={{ marginTop: 14 }}>
+        <div className="group-title">Кухня</div>
+        <div className="card-flat">
           <MenuRow
             icon={<IconBook size={19} />}
             title="Рецепты"
             hint={`${recipes} блюд · поиск, фильтры, добавление`}
             onClick={() => navigate('/recipes')}
-          />
-          <MenuRow
-            icon={<IconChart size={19} />}
-            title="Статистика"
-            hint={`${entries} приготовлений`}
-            onClick={() => navigate('/more/stats')}
           />
           <MenuRow
             icon={<IconTag size={19} />}
@@ -92,21 +81,31 @@ export function More() {
             onClick={() => navigate('/more/products')}
           />
           <MenuRow
-            icon={<IconFridge size={19} />}
-            title="Что есть дома"
-            hint={`${inStock} отмечено в наличии`}
-            onClick={() => navigate('/fridge')}
+            icon={<IconChart size={19} />}
+            title="Статистика"
+            hint={`${entries} приготовлений`}
+            onClick={() => navigate('/more/stats')}
           />
+        </div>
+
+        <div className="group-title">Приложение</div>
+        <div className="card-flat">
           <MenuRow
             icon={<IconCloud size={19} />}
-            title="Google Drive"
-            hint={sync.email ?? (sync.status === 'unconfigured' ? 'не подключён' : 'подключение не завершено')}
+            title="Google Drive и доступ"
+            hint={
+              sync.status === 'unconfigured'
+                ? 'не подключён'
+                : sync.email
+                  ? `${sync.email}${accountsBound > 1 ? ' · и Саша' : ''}`
+                  : 'подключение не завершено'
+            }
             onClick={() => navigate('/more/settings')}
           />
           <MenuRow
             icon={<IconSettings size={19} />}
             title="Настройки"
-            hint="Подсказки, тема, экспорт данных"
+            hint="Разделы, подсказки, тема, резервная копия"
             onClick={() => navigate('/more/settings')}
           />
         </div>

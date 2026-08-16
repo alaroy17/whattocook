@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useStore } from './lib/store'
 import { ToastHost } from './components/ui'
+import { IdentityPrompt } from './components/IdentityPrompt'
+import { applyUpdate, onUpdateReady } from './lib/updates'
 import { IconCalendar, IconFridge, IconHome, IconList, IconMore } from './components/Icons'
 import { Today } from './pages/Today'
 import { Recipes } from './pages/Recipes'
@@ -25,8 +27,11 @@ const TABS = [
 ]
 
 export function App() {
-  const { db } = useStore()
+  const { db, needsIdentity } = useStore()
   const fridgeAlert = fridgeNeedsReview(db)
+  const [updateReady, setUpdateReady] = useState(false)
+
+  useEffect(() => onUpdateReady(setUpdateReady), [])
 
   // Тема применяется к корню документа, чтобы её видели и портальные окна.
   useEffect(() => {
@@ -73,6 +78,17 @@ export function App() {
           </NavLink>
         ))}
       </nav>
+
+      {updateReady && (
+        <div className="update-bar">
+          <span className="grow">Вышло обновление приложения</span>
+          <button className="btn btn-sm btn-primary" onClick={applyUpdate}>
+            Обновить
+          </button>
+        </div>
+      )}
+
+      {needsIdentity && <IdentityPrompt />}
 
       <ToastHost />
     </div>

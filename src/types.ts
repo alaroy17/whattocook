@@ -182,6 +182,13 @@ export interface Settings {
   fridgeRemindDays: number
   /** Когда в последний раз подтверждали, что список продуктов дома актуален. */
   fridgeReviewedAt: string | null
+  /**
+   * Какой Google-аккаунт кому принадлежит. Заполняется один раз при первом входе,
+   * дальше приложение само понимает, кто им пользуется, — переключать вручную не нужно.
+   */
+  userEmails: Partial<Record<UserId, string>>
+  /** Кому уже открыли доступ к папке на Диске — чтобы не гадать, ушло приглашение или нет. */
+  sharedWith: string[]
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -192,6 +199,8 @@ export const DEFAULT_SETTINGS: Settings = {
   categories: DEFAULT_CATEGORIES,
   fridgeRemindDays: 7,
   fridgeReviewedAt: null,
+  userEmails: {},
+  sharedWith: [],
 }
 
 export interface Database {

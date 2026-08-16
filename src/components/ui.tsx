@@ -10,14 +10,19 @@ export function Sheet({
   onClose,
   children,
   actions,
+  dismissible = true,
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   actions?: ReactNode
+  /** false — окно требует ответа: без крестика, клика по фону и Escape. */
+  dismissible?: boolean
 }) {
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && dismissible) onClose()
+    }
     document.addEventListener('keydown', onKey)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -25,17 +30,22 @@ export function Sheet({
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = previous
     }
-  }, [onClose])
+  }, [onClose, dismissible])
 
   return createPortal(
-    <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div
+      className="overlay"
+      onMouseDown={(event) => dismissible && event.target === event.currentTarget && onClose()}
+    >
       <div className="sheet" role="dialog" aria-modal="true">
         <div className="sheet-head">
           <h2>{title}</h2>
           {actions}
-          <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
-            <IconClose />
-          </button>
+          {dismissible && (
+            <button className="icon-btn" onClick={onClose} aria-label="Закрыть">
+              <IconClose />
+            </button>
+          )}
         </div>
         {children}
       </div>
