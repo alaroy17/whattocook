@@ -200,19 +200,48 @@ export const IconPot = (p: IconProps) => (
   </Base>
 )
 
-/** Женская фигура — Саша. */
-export const IconFemale = (p: IconProps) => (
+/**
+ * Кошачьи мордочки для аватаров. Рисуются мелко (15–20 px), поэтому без усов
+ * и прочих деталей: на такой величине они превращаются в грязь.
+ * Кошку от кота отличает бантик — при таком размере это читается лучше всего.
+ */
+const CAT_HEAD = (
+  <>
+    <path d="M6.6 9.2 5.4 4.3l4.4 2.2" />
+    <path d="M17.4 9.2l1.2-4.9-4.4 2.2" />
+    <path d="M12 6.1c3.6 0 6.4 2.9 6.4 6.5S15.6 19.9 12 19.9 5.6 16.2 5.6 12.6 8.4 6.1 12 6.1z" />
+    <circle cx="9.6" cy="12.2" r="0.95" fill="currentColor" stroke="none" />
+    <circle cx="14.4" cy="12.2" r="0.95" fill="currentColor" stroke="none" />
+    <path d="M12 14.6v.9" />
+    <path d="M10.5 16.2c.5.6 2.5.6 3 0" />
+  </>
+)
+
+/** Кошка — Саша. */
+export const IconCatGirl = (p: IconProps) => (
   <Base {...p}>
-    <circle cx="12" cy="6.6" r="3.1" />
-    <path d="M12 10.4c-2.2 0-3.6 1.4-4 3.4l-.8 4h2l.5 4.2h4.6l.5-4.2h2l-.8-4c-.4-2-1.8-3.4-4-3.4z" />
+    {CAT_HEAD}
+    <path d="M3.1 3.4 5.9 5.1 3.1 6.8z" />
+    <path d="M8.7 3.4 5.9 5.1l2.8 1.7z" />
   </Base>
 )
 
-/** Мужская фигура — Андрей. */
-export const IconMale = (p: IconProps) => (
+/** Кот — Андрей. */
+export const IconCatBoy = (p: IconProps) => (
   <Base {...p}>
-    <circle cx="12" cy="6.6" r="3.1" />
-    <path d="M7.4 21.4v-6.6H6v-2.2c0-1.3 1-2.2 2.3-2.2h7.4c1.3 0 2.3.9 2.3 2.2v2.2h-1.4v6.6z" />
+    {CAT_HEAD}
+    <path d="M9.4 20.4c.9.5 4.3.5 5.2 0" />
+  </Base>
+)
+
+/** Лапка — метка «вместе». */
+export const IconPaw = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 13.4c2.4 0 4.3 1.7 4.3 3.7 0 1.6-1.3 2.6-2.8 2.2-1-.3-2-.3-3 0-1.5.4-2.8-.6-2.8-2.2 0-2 1.9-3.7 4.3-3.7z" />
+    <ellipse cx="7.2" cy="10.4" rx="1.7" ry="2.1" />
+    <ellipse cx="16.8" cy="10.4" rx="1.7" ry="2.1" />
+    <ellipse cx="10.6" cy="6.6" rx="1.6" ry="2" />
+    <ellipse cx="14.6" cy="7.4" rx="1.5" ry="1.9" />
   </Base>
 )
 

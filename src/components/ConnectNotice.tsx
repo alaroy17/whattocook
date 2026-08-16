@@ -29,6 +29,26 @@ export function ConnectNotice() {
       .finally(() => setBusy(false))
   }
 
+  /*
+   * Пока открыто окно Google, страница должна показывать, чего она ждёт:
+   * иначе окно выглядит как случайно всплывшая вкладка, а приложение —
+   * как будто ничего не происходит.
+   */
+  if (busy) {
+    return (
+      <div className="notice">
+        <IconCloud size={20} />
+        <div className="grow small">
+          <strong>Ждём подтверждения в окне Google</strong>
+          <div className="muted">Выберите аккаунт в открывшемся окне. Если оно закрылось — войдите ещё раз.</div>
+        </div>
+        <button className="btn btn-sm" onClick={() => setBusy(false)}>
+          Отмена
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="notice">
       <IconCloud size={20} />
@@ -40,8 +60,8 @@ export function ConnectNotice() {
             : 'Сейчас рецепты видны только на этом устройстве'}
         </div>
       </div>
-      <button className="btn btn-sm btn-primary" disabled={busy} onClick={signIn}>
-        {busy ? '…' : 'Войти'}
+      <button className="btn btn-sm btn-primary" onClick={signIn}>
+        Войти
       </button>
     </div>
   )

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { IconClose, IconFemale, IconMale, IconSearch, IconStar, IconUsers } from './Icons'
+import { IconCatBoy, IconCatGirl, IconClose, IconPaw, IconSearch, IconStar } from './Icons'
 import { classNames } from '../lib/util'
 import { USERS, userName } from '../types'
 
@@ -187,14 +187,14 @@ export function Avatar({
 
   const glyph = user ? (
     user.figure === 'female' ? (
-      <IconFemale size={size} />
+      <IconCatGirl size={size} />
     ) : (
-      <IconMale size={size} />
+      <IconCatBoy size={size} />
     )
   ) : id === 'outside' ? (
     <IconClose size={size} />
   ) : (
-    <IconUsers size={size} />
+    <IconPaw size={size} />
   )
 
   const badge = (
