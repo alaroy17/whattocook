@@ -162,6 +162,11 @@ export interface Entry extends Syncable {
   ratings?: Partial<Record<UserId, number>>
   /** Фактическая стоимость, если хочется поправить расчётную. */
   cost?: number | null
+  /**
+   * На сколько порций готовим этот раз. Если не указано — как в рецепте.
+   * Влияет на количества в списке покупок.
+   */
+  servings?: number | null
 }
 
 export interface Product extends Syncable {

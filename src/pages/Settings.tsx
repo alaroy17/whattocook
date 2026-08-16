@@ -105,7 +105,7 @@ function CategoryManager() {
 }
 
 export function SettingsPage() {
-  const { db, sync, connect, disconnect, syncNow, updateSettings, replaceDatabase } = useStore()
+  const { db, sync, connect, connecting, disconnect, syncNow, updateSettings, replaceDatabase } = useStore()
   const [shareEmail, setShareEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -178,7 +178,9 @@ export function SettingsPage() {
 
             {!connected && (
               <div className="small muted" style={{ marginTop: 6 }}>
-                Войдите в тот Google-аккаунт, которому открыт доступ к общей папке
+                {connecting
+                  ? 'Ждём подтверждения в окне Google — выберите там аккаунт'
+                  : 'Войдите в тот Google-аккаунт, которому открыт доступ к общей папке'}
               </div>
             )}
 
@@ -190,10 +192,10 @@ export function SettingsPage() {
               ) : (
                 <button
                   className="btn btn-primary grow"
-                  disabled={busy}
+                  disabled={busy || connecting}
                   onClick={() => void doConnect()}
                 >
-                  Войти в Google
+                  {connecting ? 'Ждём Google…' : 'Войти в Google'}
                 </button>
               )}
             </div>

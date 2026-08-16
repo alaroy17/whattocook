@@ -3,9 +3,10 @@ import { MEAL_SLOTS, USERS, type Cook, type Entry, type MealSlot, type Recipe } 
 import { useStore } from '../lib/store'
 import { Avatar, Confirm, Field, Segmented, Sheet, Stars, UserPicker, toast } from './ui'
 import { RecipePicker } from './RecipePicker'
-import { buildProductIndex, recipeCost } from '../lib/cost'
+import { buildProductIndex, recipeCost, servingsMultiplier } from '../lib/cost'
 import { alive } from '../lib/db'
 import { formatDate } from '../lib/date'
+import { countOf } from '../lib/util'
 import { IconTrash } from './Icons'
 
 export function EntryEditor({
@@ -28,12 +29,15 @@ export function EntryEditor({
   const [note, setNote] = useState(initial.note ?? '')
   const [ratings, setRatings] = useState(initial.ratings ?? {})
   const [cost, setCost] = useState(initial.cost != null ? String(initial.cost) : '')
+  const [servings, setServings] = useState(initial.servings != null ? String(initial.servings) : '')
   const [picking, setPicking] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const recipe: Recipe | undefined = recipeId ? db.recipes[recipeId] : undefined
   const index = buildProductIndex(alive(db.products))
-  const estimated = recipe ? recipeCost(recipe, index) : null
+  const estimated = recipe
+    ? recipeCost(recipe, index, servingsMultiplier(recipe, servings ? Number(servings) : null))
+    : null
 
   const submit = () => {
     if (!date) {
@@ -56,6 +60,7 @@ export function EntryEditor({
       note: note.trim() || undefined,
       ratings,
       cost: cost.trim() && Number.isFinite(parsedCost) ? parsedCost : null,
+      servings: servings.trim() ? Number(servings) : null,
     })
     onClose()
   }
@@ -131,6 +136,21 @@ export function EntryEditor({
               </button>
             )}
           </div>
+
+          {recipe?.servings != null && (
+            <Field
+              label="Порций"
+              hint={`В рецепте ${countOf(recipe.servings, 'serving')} — количество в списке покупок пересчитается`}
+            >
+              <input
+                className="input"
+                inputMode="numeric"
+                placeholder={String(recipe.servings)}
+                value={servings}
+                onChange={(e) => setServings(e.target.value.replace(/\D/g, ''))}
+              />
+            </Field>
+          )}
 
           <Field label="Кто готовил">
             <UserPicker value={cook} onChange={(value) => setCook(value as Cook)} allowBoth />

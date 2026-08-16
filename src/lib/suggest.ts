@@ -87,7 +87,13 @@ export function scoreRecipes(
     if (filters.tag && !recipe.tags.includes(filters.tag)) continue
     if (filters.maxTime && (recipe.timeMin ?? 999) > filters.maxTime) continue
     if (search) {
-      const haystack = [recipe.name, recipe.category, ...recipe.tags, ...recipe.ingredients.map((i) => i.name)]
+      const haystack = [
+        recipe.name,
+        recipe.category,
+        recipe.steps,
+        ...recipe.tags,
+        ...recipe.ingredients.map((i) => i.name),
+      ]
         .join(' ')
         .toLowerCase()
       if (!haystack.includes(search)) continue

@@ -29,8 +29,9 @@ export function TopBar({
   showUser?: boolean
 }) {
   const navigate = useNavigate()
-  const { me, setMe, sync, identityLocked } = useStore()
+  const { me, setMe, sync, identityLocked, connecting } = useStore()
   const name = USERS.find((user) => user.id === me)?.name
+  const syncLabel = connecting ? 'Ждём входа в Google…' : SYNC_TEXT[sync.status]
 
   return (
     <header className="topbar">
@@ -49,10 +50,10 @@ export function TopBar({
         {subtitle ? (
           <div className="topbar-sub">{subtitle}</div>
         ) : (
-          sync.status !== 'idle' && (
+          (sync.status !== 'idle' || connecting) && (
             <div className="topbar-sub row" style={{ gap: 5 }}>
-              <span className={classNames('sync-dot', sync.status)} />
-              {SYNC_TEXT[sync.status]}
+              <span className={classNames('sync-dot', connecting ? 'syncing' : sync.status)} />
+              {syncLabel}
             </div>
           )
         )}

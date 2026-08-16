@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useStore } from '../lib/store'
 import { IconCloud } from './Icons'
 import { toast } from './ui'
@@ -11,8 +10,7 @@ import { toast } from './ui'
  * в шапке, а вход прятался в «Ещё → Настройки».
  */
 export function ConnectNotice() {
-  const { sync, connect } = useStore()
-  const [busy, setBusy] = useState(false)
+  const { sync, connect, connecting } = useStore()
 
   const connected = sync.status === 'idle' || sync.status === 'syncing'
   if (connected || sync.status === 'no-database') return null
@@ -21,12 +19,9 @@ export function ConnectNotice() {
   const expired = sync.lastSyncAt !== null
 
   const signIn = () => {
-    setBusy(true)
-    void connect()
-      .catch((error: unknown) =>
-        toast(error instanceof Error ? error.message : 'Не удалось войти в Google'),
-      )
-      .finally(() => setBusy(false))
+    void connect().catch((error: unknown) =>
+      toast(error instanceof Error ? error.message : 'Не удалось войти в Google'),
+    )
   }
 
   /*
@@ -34,17 +29,16 @@ export function ConnectNotice() {
    * иначе окно выглядит как случайно всплывшая вкладка, а приложение —
    * как будто ничего не происходит.
    */
-  if (busy) {
+  if (connecting) {
     return (
       <div className="notice">
         <IconCloud size={20} />
         <div className="grow small">
           <strong>Ждём подтверждения в окне Google</strong>
-          <div className="muted">Выберите аккаунт в открывшемся окне. Если оно закрылось — войдите ещё раз.</div>
+          <div className="muted">
+            Выберите аккаунт в открывшемся окне. Если окно закрылось — нажмите «Войти» ещё раз.
+          </div>
         </div>
-        <button className="btn btn-sm" onClick={() => setBusy(false)}>
-          Отмена
-        </button>
       </div>
     )
   }

@@ -15,6 +15,7 @@ import {
 import { loadLocal, mergeDatabases, normalizeDatabase, pruneTombstones, saveLocal, serialize } from './db'
 import * as drive from './drive'
 import { ensureDailySnapshot } from './snapshots'
+import { listPendingPhotos, uploadPendingPhoto } from './photos'
 import { nowIso, uid } from './util'
 
 export type SyncStatus = 'unconfigured' | 'offline' | 'idle' | 'syncing' | 'error' | 'no-database'
@@ -39,6 +40,8 @@ interface StoreValue {
   needsIdentity: boolean
   sync: SyncState
   connect: () => Promise<void>
+  /** Открыто окно входа Google — интерфейс показывает ожидание. */
+  connecting: boolean
   disconnect: () => void
   syncNow: () => Promise<void>
   /** Создать базу на своём Диске — когда общей нет и её никто не откроет. */
@@ -71,14 +74,22 @@ function stamp<T extends Syncable>(existing: T | undefined, patch: Partial<T>, i
   } as T
 }
 
+/**
+ * Почту запоминаем на устройстве. Иначе до первого ответа Google «кто вы»
+ * вычислить не из чего, и имя в шапке прыгало: локальный выбор → привязка
+ * по почте → снова локальный выбор, если очередной запрос почты не удался.
+ */
+const EMAIL_KEY = 'wtc.google.email'
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Database>(() => loadLocal() ?? emptyDatabase())
   const [localMe, setLocalMe] = useState<UserId>(() => (localStorage.getItem(ME_KEY) as UserId) || 'andrei')
+  const [connecting, setConnecting] = useState(false)
   const [sync, setSync] = useState<SyncState>({
     status: drive.getClientId() ? 'offline' : 'unconfigured',
     message: '',
     lastSyncAt: localStorage.getItem('wtc.lastSyncAt'),
-    email: null,
+    email: localStorage.getItem(EMAIL_KEY),
   })
 
   const dbRef = useRef(db)
@@ -155,15 +166,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         localStorage.setItem('wtc.lastSyncAt', at)
         // Ежедневная копия базы — в фоне, синхронизацию не задерживает.
         void ensureDailySnapshot(merged).catch(() => {})
-        let email = sync.email
+        // Фото, добавленные без сети, доезжают на Диск при первой возможности.
+        void flushPendingPhotosRef.current()
+
+        /*
+         * Почту спрашиваем только если её ещё не знаем, и никогда не затираем
+         * уже известную неудачным запросом — иначе привязанное имя мигает.
+         */
+        let email = sync.email ?? localStorage.getItem(EMAIL_KEY)
         if (!email) {
           email = await drive.fetchUserInfo().then((info) => info.email).catch(() => null)
         }
+        if (email) localStorage.setItem(EMAIL_KEY, email)
         setSync({ status: 'idle', message: '', lastSyncAt: at, email })
       } catch (error) {
         // Базы нет ни своей, ни общей — спрашиваем пользователя, а не создаём вторую молча.
         if (error instanceof drive.NoDatabaseError) {
           const email = await drive.fetchUserInfo().then((info) => info.email).catch(() => null)
+          if (email) localStorage.setItem(EMAIL_KEY, email)
           setSync((s) => ({ ...s, status: 'no-database', message: '', email: email ?? s.email }))
           return
         }
@@ -183,6 +203,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const runSyncRef = useRef(runSync)
   runSyncRef.current = runSync
+
+  /** Загружает отложенные фото и переписывает ссылки в рецептах на настоящие id. */
+  const flushingPhotos = useRef(false)
+  const flushPendingPhotos = useCallback(async () => {
+    if (flushingPhotos.current) return
+    const queue = listPendingPhotos()
+    if (queue.length === 0) return
+    flushingPhotos.current = true
+    try {
+      for (const pendingId of queue) {
+        try {
+          const photoId = await uploadPendingPhoto(pendingId)
+          if (!photoId) continue
+          mutate((draft) => {
+            for (const [id, recipe] of Object.entries(draft.recipes)) {
+              if (recipe.photoId === pendingId) {
+                draft.recipes[id] = { ...recipe, photoId, updatedAt: nowIso() }
+              }
+            }
+          })
+        } catch {
+          // Сеть снова пропала — остаток очереди подождёт следующей синхронизации.
+          break
+        }
+      }
+    } finally {
+      flushingPhotos.current = false
+    }
+  }, [mutate])
+  const flushPendingPhotosRef = useRef(flushPendingPhotos)
+  flushPendingPhotosRef.current = flushPendingPhotos
 
   const schedulePush = useCallback(() => {
     if (pushTimer.current) clearTimeout(pushTimer.current)
@@ -245,10 +296,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       identityLocked: boundUser !== null,
       needsIdentity,
       sync,
-      connect: () => runSyncRef.current(true),
+      connect: async () => {
+        // Флаг «ждём окно Google» — чтобы страница показывала, что происходит.
+        setConnecting(true)
+        try {
+          await runSyncRef.current(true)
+        } finally {
+          setConnecting(false)
+        }
+      },
+      connecting,
       disconnect: () => {
         drive.signOut()
         drive.forgetFile()
+        localStorage.removeItem(EMAIL_KEY)
         setSync((s) => ({ ...s, status: 'offline', email: null, message: '' }))
       },
       syncNow: () => runSyncRef.current(false),
@@ -333,7 +394,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         schedulePush()
       },
     }
-  }, [db, me, boundUser, needsIdentity, sync, mutate, applyDb, schedulePush])
+  }, [db, me, boundUser, needsIdentity, sync, connecting, mutate, applyDb, schedulePush])
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

@@ -14,7 +14,7 @@ import {
   saveChecked,
   shoppingListToText,
 } from '../lib/shopping'
-import { buildProductIndex } from '../lib/cost'
+import { buildProductIndex, servingsMultiplier } from '../lib/cost'
 import { classNames, formatAmount, formatMoney } from '../lib/util'
 import { IconCart, IconCheck, IconChevronLeft, IconChevronRight, IconPlus } from '../components/Icons'
 
@@ -54,12 +54,15 @@ export function Plan() {
 
   /** Список покупок собираем из запланированного на выбранную неделю. */
   const plannedRecipes = useMemo(() => {
-    const result: { recipe: Recipe }[] = []
+    const result: { recipe: Recipe; multiplier: number }[] = []
     for (const date of days) {
       for (const entry of entriesByDate.get(date) ?? []) {
         if (entry.status !== 'planned' || !entry.recipeId) continue
         const recipe = db.recipes[entry.recipeId]
-        if (recipe && !recipe.deletedAt) result.push({ recipe })
+        // Если для этого раза указали своё число порций — количества масштабируются.
+        if (recipe && !recipe.deletedAt) {
+          result.push({ recipe, multiplier: servingsMultiplier(recipe, entry.servings) })
+        }
       }
     }
     return result

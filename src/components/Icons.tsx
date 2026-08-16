@@ -63,6 +63,12 @@ export const IconPlus = (p: IconProps) => (
   </Base>
 )
 
+export const IconMinus = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M5 12h14" />
+  </Base>
+)
+
 export const IconSearch = (p: IconProps) => (
   <Base size={17} {...p}>
     <circle cx="11" cy="11" r="6.5" />
@@ -202,36 +208,34 @@ export const IconPot = (p: IconProps) => (
 
 /**
  * Кошачьи мордочки для аватаров. Рисуются мелко (15–20 px), поэтому без усов
- * и прочих деталей: на такой величине они превращаются в грязь.
- * Кошку от кота отличает бантик — при таком размере это читается лучше всего.
+ * и мелких деталей. Оба уха всегда открыты — бантик у кошки маленький и стоит
+ * в промежутке между ушами, ничего не перекрывая.
  */
 const CAT_HEAD = (
   <>
-    <path d="M6.6 9.2 5.4 4.3l4.4 2.2" />
-    <path d="M17.4 9.2l1.2-4.9-4.4 2.2" />
-    <path d="M12 6.1c3.6 0 6.4 2.9 6.4 6.5S15.6 19.9 12 19.9 5.6 16.2 5.6 12.6 8.4 6.1 12 6.1z" />
-    <circle cx="9.6" cy="12.2" r="0.95" fill="currentColor" stroke="none" />
-    <circle cx="14.4" cy="12.2" r="0.95" fill="currentColor" stroke="none" />
-    <path d="M12 14.6v.9" />
-    <path d="M10.5 16.2c.5.6 2.5.6 3 0" />
+    {/* уши — треугольники, основание лежит на контуре головы */}
+    <path d="M7.4 8.5 6 4.4l4.2 2.3" />
+    <path d="M16.6 8.5 18 4.4l-4.2 2.3" />
+    <circle cx="12" cy="13" r="6.6" />
+    <circle cx="9.7" cy="12.4" r="0.95" fill="currentColor" stroke="none" />
+    <circle cx="14.3" cy="12.4" r="0.95" fill="currentColor" stroke="none" />
+    <path d="M12 14.8v.8" />
+    <path d="M10.6 16.6c.5.55 2.3.55 2.8 0" />
   </>
 )
 
-/** Кошка — Саша. */
+/** Кошка — Саша: маленький бантик между ушами, уши свободны. */
 export const IconCatGirl = (p: IconProps) => (
   <Base {...p}>
     {CAT_HEAD}
-    <path d="M3.1 3.4 5.9 5.1 3.1 6.8z" />
-    <path d="M8.7 3.4 5.9 5.1l2.8 1.7z" />
+    <path d="M12 4.6 9.9 3.3v2.6z" />
+    <path d="M12 4.6l2.1-1.3v2.6z" />
   </Base>
 )
 
-/** Кот — Андрей. */
+/** Кот — Андрей: та же морда без украшений, различие держат цвет и бантик кошки. */
 export const IconCatBoy = (p: IconProps) => (
-  <Base {...p}>
-    {CAT_HEAD}
-    <path d="M9.4 20.4c.9.5 4.3.5 5.2 0" />
-  </Base>
+  <Base {...p}>{CAT_HEAD}</Base>
 )
 
 /** Лапка — метка «вместе». */

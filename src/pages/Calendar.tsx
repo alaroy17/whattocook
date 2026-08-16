@@ -19,7 +19,7 @@ import {
 import { classNames, countOf, formatMoney } from '../lib/util'
 import { IconChevronLeft, IconChevronRight, IconPlus } from '../components/Icons'
 import { EntryEditor } from '../components/EntryEditor'
-import { Avatar, Empty, Segmented } from '../components/ui'
+import { Avatar, Empty, SearchInput, Segmented } from '../components/ui'
 import { Thumb } from '../components/RecipeRow'
 import { categoryColor, MEAL_SLOTS, type Entry, type Recipe } from '../types'
 
@@ -31,6 +31,7 @@ export function CalendarPage() {
   const [selected, setSelected] = useState(today())
   const [view, setView] = useState<View>('month')
   const [editing, setEditing] = useState<Entry | 'new' | null>(null)
+  const [search, setSearch] = useState('')
 
   const byDate = useMemo(() => {
     const map = new Map<string, Entry[]>()
@@ -74,10 +75,29 @@ export function CalendarPage() {
     return [...set].sort((a, b) => a.localeCompare(b, 'ru'))
   }, [monthEntries, db.recipes])
 
+  /**
+   * Поиск по истории: имя блюда, заметка, свободное название. В режиме поиска
+   * лента не ограничена месяцем — ищем по всему, что когда-либо ели.
+   */
+  const searched = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    if (!query) return null
+    return alive(db.entries)
+      .filter((entry) => {
+        const recipe = entry.recipeId ? db.recipes[entry.recipeId] : undefined
+        const haystack = [recipe?.name ?? '', entry.title ?? '', entry.note ?? '']
+          .join(' ')
+          .toLowerCase()
+        return haystack.includes(query)
+      })
+      .sort((a, b) => b.date.localeCompare(a.date))
+  }, [search, db.entries, db.recipes])
+
   const feedDays = useMemo(() => {
-    const days = new Set(monthEntries.map((entry) => entry.date))
+    const source = searched ?? monthEntries
+    const days = new Set(source.map((entry) => entry.date))
     return [...days].sort((a, b) => b.localeCompare(a))
-  }, [monthEntries])
+  }, [monthEntries, searched])
 
   const dayEntries = byDate.get(selected) ?? []
 
@@ -211,32 +231,54 @@ export function CalendarPage() {
               )}
             </section>
           </>
-        ) : feedDays.length === 0 ? (
-          <Empty title="В этом месяце пусто" text="Записи появятся здесь, как только что-нибудь приготовите" />
         ) : (
-          <div>
-            {feedDays.map((date) => (
-              <div className="feed-day" key={date}>
-                <div className={classNames('feed-date', date === today() && 'is-today')}>
-                  <div className="day">{fromIsoDate(date).getDate()}</div>
-                  <div className="wd">{WEEKDAYS_SHORT[(fromIsoDate(date).getDay() + 6) % 7]}</div>
-                </div>
-                <div className="grow">
-                  {(byDate.get(date) ?? []).map((entry) => (
-                    <EntryCard
-                      key={entry.id}
-                      entry={entry}
-                      recipe={entry.recipeId ? db.recipes[entry.recipeId] : undefined}
-                      title={nameOf(entry)}
-                      currency={db.settings.currency}
-                      onClick={() => setEditing(entry)}
-                      withPhoto
-                    />
-                  ))}
-                </div>
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <SearchInput value={search} onChange={setSearch} placeholder="Что и когда ели" />
+            </div>
+            {searched && (
+              <div className="small muted" style={{ marginBottom: 8 }}>
+                {searched.length === 0
+                  ? 'Ничего не нашлось за всю историю'
+                  : `${countOf(searched.length, 'entry')} за всю историю`}
               </div>
-            ))}
-          </div>
+            )}
+            {feedDays.length === 0 && !searched ? (
+              <Empty title="В этом месяце пусто" text="Записи появятся здесь, как только что-нибудь приготовите" />
+            ) : (
+              <div>
+                {feedDays.map((date) => {
+                  const list = searched
+                    ? searched.filter((entry) => entry.date === date)
+                    : byDate.get(date) ?? []
+                  return (
+                    <div className="feed-day" key={date}>
+                      <div className={classNames('feed-date', date === today() && 'is-today')}>
+                        <div className="day">{fromIsoDate(date).getDate()}</div>
+                        <div className="wd">{WEEKDAYS_SHORT[(fromIsoDate(date).getDay() + 6) % 7]}</div>
+                        {searched && (
+                          <div className="wd">{fromIsoDate(date).toLocaleDateString('ru-RU', { month: 'short' })}</div>
+                        )}
+                      </div>
+                      <div className="grow">
+                        {list.map((entry) => (
+                          <EntryCard
+                            key={entry.id}
+                            entry={entry}
+                            recipe={entry.recipeId ? db.recipes[entry.recipeId] : undefined}
+                            title={nameOf(entry)}
+                            currency={db.settings.currency}
+                            onClick={() => setEditing(entry)}
+                            withPhoto
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
         )}
       </main>
 

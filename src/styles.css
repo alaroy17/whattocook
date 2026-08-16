@@ -1271,6 +1271,24 @@ select.plain {
   color: var(--text-2);
 }
 
+/* Пересчёт порций над списком ингредиентов */
+.portions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 14px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+}
+
+.portions-value {
+  min-width: 92px;
+  text-align: center;
+  font-size: var(--text-sm);
+  font-weight: 550;
+}
+
 .steps {
   white-space: pre-wrap;
   line-height: 1.6;

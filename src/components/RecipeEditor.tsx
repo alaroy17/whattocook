@@ -6,9 +6,8 @@ import { ingredientsToText, parseIngredientList } from '../lib/ingredientText'
 import { useStore } from '../lib/store'
 import { Field, Sheet, UserPicker, toast } from './ui'
 import { IconPhoto, IconPlus, IconTrash } from './Icons'
-import { discardPhoto, uploadRecipePhoto } from '../lib/photos'
+import { discardPhoto, isPendingPhoto, uploadRecipePhoto } from '../lib/photos'
 import { Thumb } from './RecipeRow'
-import * as drive from '../lib/drive'
 
 // Единица пустая по умолчанию: «столько грамм на столько порций» — необязательная точность.
 const EMPTY_INGREDIENT: RecipeIngredient = { name: '', qty: null, unit: '' }
@@ -62,14 +61,12 @@ export function RecipeEditor({
 
   const onPickPhoto = async (file: File | undefined) => {
     if (!file) return
-    if (!drive.hasToken()) {
-      toast('Сначала подключите Google Drive — фото хранятся там')
-      return
-    }
     setUploading(true)
     try {
       // Старый файл не трогаем: правку ещё могут отменить, и фото исчезло бы зря.
-      setPhotoId(await uploadRecipePhoto(file))
+      const uploaded = await uploadRecipePhoto(file)
+      setPhotoId(uploaded)
+      if (isPendingPhoto(uploaded)) toast('Фото сохранится на Диск, когда появится сеть')
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Не удалось загрузить фото')
     } finally {

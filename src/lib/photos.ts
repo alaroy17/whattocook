@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import * as drive from './drive'
+import { uid } from './util'
 
 const CACHE_NAME = 'wtc-photos-v1'
 const MAX_SIDE = 1200
@@ -49,9 +50,71 @@ async function writeCache(photoId: string, blob: Blob): Promise<void> {
   }
 }
 
+/*
+ * Офлайн-очередь. Без сети фото получает временный идентификатор pending-…,
+ * снимок лежит в кэше, а после успешной синхронизации загружается на Диск,
+ * и записи в базе переключаются на настоящий идентификатор.
+ */
+const PENDING_PREFIX = 'pending-'
+const PENDING_KEY = 'wtc.photos.pending'
+
+export function isPendingPhoto(photoId: string | undefined | null): boolean {
+  return Boolean(photoId?.startsWith(PENDING_PREFIX))
+}
+
+export function listPendingPhotos(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PENDING_KEY) ?? '[]') as string[]
+    return Array.isArray(raw) ? raw : []
+  } catch {
+    return []
+  }
+}
+
+function savePending(ids: string[]): void {
+  localStorage.setItem(PENDING_KEY, JSON.stringify(ids))
+}
+
+function removePending(photoId: string): void {
+  savePending(listPendingPhotos().filter((id) => id !== photoId))
+}
+
+export async function readPhotoBlob(photoId: string): Promise<Blob | null> {
+  return readCache(photoId)
+}
+
+/** Загружает отложенный снимок на Диск. Возвращает настоящий идентификатор. */
+export async function uploadPendingPhoto(pendingId: string): Promise<string | null> {
+  const blob = await readCache(pendingId)
+  if (!blob) {
+    // Кэш почистили — загружать нечего, забываем.
+    removePending(pendingId)
+    return null
+  }
+  const photoId = await drive.uploadPhoto(blob, `photo-${Date.now()}.jpg`)
+  await writeCache(photoId, blob)
+  await deleteCacheEntry(pendingId)
+  removePending(pendingId)
+  return photoId
+}
+
 export async function uploadRecipePhoto(file: File, replacing?: string): Promise<string> {
   const blob = await compressImage(file)
-  const photoId = await drive.uploadPhoto(blob, `photo-${Date.now()}.jpg`)
+
+  let photoId: string
+  if (drive.hasToken()) {
+    try {
+      photoId = await drive.uploadPhoto(blob, `photo-${Date.now()}.jpg`)
+    } catch {
+      // Сеть пропала на середине — откладываем, как и при офлайне.
+      photoId = `${PENDING_PREFIX}${uid()}`
+      savePending([...listPendingPhotos(), photoId])
+    }
+  } else {
+    photoId = `${PENDING_PREFIX}${uid()}`
+    savePending([...listPendingPhotos(), photoId])
+  }
+
   await writeCache(photoId, blob)
   // Старый снимок иначе остался бы на Диске навсегда.
   if (replacing && replacing !== photoId) await discardPhoto(replacing)
@@ -60,7 +123,12 @@ export async function uploadRecipePhoto(file: File, replacing?: string): Promise
 
 /** Удаляет фотографию с Диска и из кэша. Ошибки игнорируем: файла могло уже не быть. */
 export async function discardPhoto(photoId: string): Promise<void> {
-  await drive.deleteFile(photoId).catch(() => {})
+  if (isPendingPhoto(photoId)) removePending(photoId)
+  else await drive.deleteFile(photoId).catch(() => {})
+  await deleteCacheEntry(photoId)
+}
+
+async function deleteCacheEntry(photoId: string): Promise<void> {
   if (!('caches' in window)) return
   try {
     const cache = await caches.open(CACHE_NAME)
@@ -92,6 +160,8 @@ export function usePhoto(photoId: string | undefined): string | null {
         show(cached)
         return
       }
+      // Отложенные снимки живут только в кэше — в Drive за ними идти рано.
+      if (isPendingPhoto(photoId)) return
       if (!drive.hasToken()) return
       try {
         const blob = await drive.downloadPhoto(photoId)

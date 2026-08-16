@@ -42,7 +42,7 @@ export interface RecipeCost {
   unknown: string[]
 }
 
-export function recipeCost(recipe: Recipe, index: ProductIndex): RecipeCost {
+export function recipeCost(recipe: Recipe, index: ProductIndex, multiplier = 1): RecipeCost {
   let total = 0
   let known = 0
   const unknown: string[] = []
@@ -50,11 +50,32 @@ export function recipeCost(recipe: Recipe, index: ProductIndex): RecipeCost {
     const cost = ingredientCost(ingredient, index)
     if (cost == null) unknown.push(ingredient.name)
     else {
-      total += cost
+      total += cost * multiplier
       known++
     }
   }
   return { total, known, unknown }
+}
+
+/**
+ * Во сколько раз масштабировать рецепт, если готовим на другое число порций.
+ * Без указанных порций в рецепте пересчитывать не от чего — множитель 1.
+ */
+export function servingsMultiplier(recipe: Recipe, servings: number | null | undefined): number {
+  if (!recipe.servings || !servings || servings <= 0) return 1
+  return servings / recipe.servings
+}
+
+export function scaleIngredient(ingredient: RecipeIngredient, multiplier: number): RecipeIngredient {
+  if (multiplier === 1 || ingredient.qty == null) return ingredient
+  return { ...ingredient, qty: roundQty(ingredient.qty * multiplier) }
+}
+
+/** Человеческое округление: 583,33 г — это 580 г, а 2,33 шт — 2,5. */
+function roundQty(value: number): number {
+  if (value >= 100) return Math.round(value / 10) * 10
+  if (value >= 10) return Math.round(value)
+  return Math.round(value * 2) / 2
 }
 
 /** Доля ингредиентов, которые уже есть дома. */

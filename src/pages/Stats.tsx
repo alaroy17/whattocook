@@ -6,8 +6,9 @@ import { addDays, formatMonth, today } from '../lib/date'
 import { buildHistory, scoreRecipes } from '../lib/suggest'
 import { Empty, Segmented } from '../components/ui'
 import { RecipeRow } from '../components/RecipeRow'
-import { formatMoney, timesWord } from '../lib/util'
+import { formatMoney, normalizeName, timesWord } from '../lib/util'
 import { USERS, userName } from '../types'
+import { buildProductIndex, ingredientCost, servingsMultiplier } from '../lib/cost'
 
 type Period = '30' | '90' | '365' | 'all'
 
@@ -102,6 +103,35 @@ export function Stats() {
       }))
   }, [entries, db.settings.currency])
 
+  /**
+   * Продукты за период: как часто попадали на стол и во сколько примерно обошлись.
+   * Стоимость — расчётная, из цен каталога и количеств в рецептах с учётом порций.
+   */
+  const topProducts = useMemo(() => {
+    const index = buildProductIndex(alive(db.products))
+    const usage = new Map<string, { name: string; times: number; spend: number }>()
+    for (const entry of entries) {
+      const recipe = entry.recipeId ? db.recipes[entry.recipeId] : undefined
+      if (!recipe) continue
+      const multiplier = servingsMultiplier(recipe, entry.servings)
+      for (const ingredient of recipe.ingredients) {
+        if (!ingredient.name.trim()) continue
+        const key = normalizeName(ingredient.name)
+        const item = usage.get(key) ?? { name: ingredient.name.trim(), times: 0, spend: 0 }
+        item.times++
+        const cost = ingredientCost(ingredient, index)
+        if (cost != null) item.spend += cost * multiplier
+        usage.set(key, item)
+      }
+    }
+    return [...usage.values()].sort((a, b) => b.times - a.times).slice(0, 10)
+  }, [entries, db.recipes, db.products])
+
+  const totalSpendEstimate = useMemo(
+    () => topProducts.reduce((sum, item) => sum + item.spend, 0),
+    [topProducts],
+  )
+
   const forgotten = useMemo(() => {
     const history = buildHistory(db)
     return scoreRecipes(db)
@@ -192,6 +222,34 @@ export function Stats() {
                 </div>
                 <div className="card">
                   <Bars rows={byMonth} />
+                </div>
+              </section>
+            )}
+
+            {topProducts.length > 0 && (
+              <section className="section">
+                <div className="section-head">
+                  <h2>Продукты</h2>
+                  {totalSpendEstimate > 0 && (
+                    <span className="small muted">
+                      ~{formatMoney(totalSpendEstimate, db.settings.currency)} по каталогу
+                    </span>
+                  )}
+                </div>
+                <div className="card">
+                  <Bars
+                    rows={topProducts.map((item) => ({
+                      label: item.name,
+                      value: item.times,
+                      hint:
+                        item.spend > 0
+                          ? `${timesWord(item.times)} · ${formatMoney(item.spend, db.settings.currency)}`
+                          : timesWord(item.times),
+                    }))}
+                  />
+                  <div className="small muted" style={{ marginTop: 8 }}>
+                    Как часто продукт попадал на стол и во сколько примерно обошёлся по ценам каталога
+                  </div>
                 </div>
               </section>
             )}

@@ -7,14 +7,22 @@ import { Thumb } from '../components/RecipeRow'
 import { Avatar, Confirm, Empty, Stars, toast } from '../components/ui'
 import { RecipeEditor } from '../components/RecipeEditor'
 import { EntryEditor } from '../components/EntryEditor'
-import { buildProductIndex, ingredientCost, recipeCost } from '../lib/cost'
+import { buildProductIndex, ingredientCost, recipeCost, scaleIngredient, servingsMultiplier } from '../lib/cost'
 import { buildHistory, daysSince, guessMeal } from '../lib/suggest'
 import { formatDate, today } from '../lib/date'
 import { agoWord, countOf, formatAmount, formatMoney, normalizeName, safeUrl, timesWord } from '../lib/util'
-import { IconCheck, IconEdit, IconHeart, IconPhoto, IconTrash, IconUsers } from '../components/Icons'
+import {
+  IconCheck,
+  IconEdit,
+  IconHeart,
+  IconMinus,
+  IconPhoto,
+  IconPlus,
+  IconTrash,
+  IconUsers,
+} from '../components/Icons'
 import { MEAL_SLOTS, USERS, userName, type Recipe } from '../types'
-import { uploadRecipePhoto } from '../lib/photos'
-import * as drive from '../lib/drive'
+import { isPendingPhoto, uploadRecipePhoto } from '../lib/photos'
 
 /** Фото блюда прямо на карточке: снять камерой или выбрать из галереи в одно нажатие. */
 function RecipePhoto({ recipe }: { recipe: Recipe }) {
@@ -23,14 +31,12 @@ function RecipePhoto({ recipe }: { recipe: Recipe }) {
 
   const pick = async (file: File | undefined) => {
     if (!file) return
-    if (!drive.hasToken()) {
-      toast('Сначала подключите Google Drive — фотографии хранятся там')
-      return
-    }
     setUploading(true)
     try {
-      saveRecipe({ id: recipe.id, photoId: await uploadRecipePhoto(file, recipe.photoId) })
-      toast('Фото добавлено')
+      const photoId = await uploadRecipePhoto(file, recipe.photoId)
+      saveRecipe({ id: recipe.id, photoId })
+      // Без сети снимок остаётся в очереди и уедет на Диск при синхронизации.
+      toast(isPendingPhoto(photoId) ? 'Фото сохранится на Диск, когда появится сеть' : 'Фото добавлено')
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Не удалось загрузить фото')
     } finally {
@@ -71,6 +77,7 @@ export function RecipeDetail() {
   const [planning, setPlanning] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [commentText, setCommentText] = useState('')
+  const [portions, setPortions] = useState<number | null>(null)
 
   const recipe = db.recipes[id]
   const index = useMemo(() => buildProductIndex(alive(db.products)), [db.products])
@@ -103,9 +110,12 @@ export function RecipeDetail() {
     )
   }
 
-  const cost = recipeCost(recipe, index)
   const days = daysSince(history, recipe.id)
   const times = history.timesCooked.get(recipe.id) ?? 0
+  // Пересчёт на другое число порций — только для просмотра, в рецепт не сохраняется.
+  const multiplier = servingsMultiplier(recipe, portions)
+  const cost = recipeCost(recipe, index, multiplier)
+  const scaled = recipe.servings != null && portions != null && portions !== recipe.servings
 
   return (
     <>
@@ -152,7 +162,7 @@ export function RecipeDetail() {
               <span className="badge badge-accent">
                 {formatMoney(cost.total, db.settings.currency)}
                 {recipe.servings
-                  ? ` · ${formatMoney(cost.total / recipe.servings, db.settings.currency)} порция`
+                  ? ` · ${formatMoney(cost.total / (portions ?? recipe.servings), db.settings.currency)} порция`
                   : ''}
               </span>
             )}
@@ -213,8 +223,38 @@ export function RecipeDetail() {
                 <span className="small muted">нет цены: {cost.unknown.length}</span>
               )}
             </div>
+
+            {/* Пересчёт на другое число порций: «готовлю на шестерых» без калькулятора. */}
+            {recipe.servings != null && (
+              <div className="portions">
+                <span className="grow small muted">Готовлю на</span>
+                <button
+                  className="icon-btn"
+                  aria-label="Меньше порций"
+                  disabled={(portions ?? recipe.servings) <= 1}
+                  onClick={() => setPortions(Math.max(1, (portions ?? recipe.servings!) - 1))}
+                >
+                  <IconMinus />
+                </button>
+                <span className="portions-value">{countOf(portions ?? recipe.servings, 'serving')}</span>
+                <button
+                  className="icon-btn"
+                  aria-label="Больше порций"
+                  onClick={() => setPortions((portions ?? recipe.servings!) + 1)}
+                >
+                  <IconPlus />
+                </button>
+                {scaled && (
+                  <button className="btn btn-sm btn-ghost" onClick={() => setPortions(null)}>
+                    Сбросить
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="card-flat">
-              {recipe.ingredients.map((ingredient, i) => {
+              {recipe.ingredients.map((raw, i) => {
+                const ingredient = scaleIngredient(raw, multiplier)
                 const product = index.get(normalizeName(ingredient.name))
                 const price = ingredientCost(ingredient, index)
                 return (

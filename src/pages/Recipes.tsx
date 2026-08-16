@@ -58,6 +58,22 @@ export function Recipes() {
       onlyInStock: extra.onlyInStock || undefined,
     }
     let result = scoreRecipes(db, filters)
+    // Поиск смотрит и в заметки к блюду — «где мы писали про меньше соли».
+    if (filters.search) {
+      const query = filters.search.toLowerCase()
+      const matchedByComment = new Set(
+        alive(db.comments)
+          .filter((comment) => comment.text.toLowerCase().includes(query))
+          .map((comment) => comment.recipeId),
+      )
+      if (matchedByComment.size > 0) {
+        const found = new Set(result.map((item) => item.recipe.id))
+        const extra = scoreRecipes(db, { ...filters, search: undefined }).filter(
+          (item) => matchedByComment.has(item.recipe.id) && !found.has(item.recipe.id),
+        )
+        result = [...result, ...extra]
+      }
+    }
     if (extra.onlyFavorite) result = result.filter((item) => item.recipe.favorite)
     if (extra.onlyRegular) result = result.filter((item) => item.recipe.regular)
 
