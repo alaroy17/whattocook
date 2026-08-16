@@ -111,10 +111,25 @@ let pending: { resolve: (token: string) => void; reject: (error: Error) => void 
 /** Общий промис для параллельных запросов токена. */
 let inFlight: Promise<string> | null = null
 
-/** Восстанавливаем токен между перезагрузками страницы, чтобы не мигать окном согласия. */
+const TOKEN_KEY = 'wtc.google.token'
+const EMAIL_KEY = 'wtc.google.email'
+
+/** Почта, под которой входили, — для login_hint, чтобы Google не спрашивал «какой аккаунт?». */
+export function getSavedEmail(): string | null {
+  return localStorage.getItem(EMAIL_KEY)
+}
+
+export function saveEmail(email: string): void {
+  localStorage.setItem(EMAIL_KEY, email)
+}
+
+/**
+ * Токен живёт в localStorage: установленное PWA убивает sessionStorage при каждом
+ * запуске, и приложение просило вход заново, хотя токен ещё был действителен.
+ */
 function restoreToken(): void {
   try {
-    const raw = sessionStorage.getItem('wtc.google.token')
+    const raw = localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
     if (!raw) return
     const parsed = JSON.parse(raw) as { token: string; expiresAt: number }
     if (parsed.expiresAt > Date.now() + 30_000) {
@@ -131,7 +146,7 @@ function storeToken(token: string, expiresIn: number): void {
   accessToken = token
   expiresAt = Date.now() + expiresIn * 1000
   try {
-    sessionStorage.setItem('wtc.google.token', JSON.stringify({ token, expiresAt }))
+    localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, expiresAt }))
   } catch {
     /* игнорируем */
   }
@@ -171,27 +186,29 @@ async function ensureTokenClient(): Promise<TokenClient> {
 }
 
 /**
- * Получение токена. interactive = false пробует тихое обновление: работает,
- * если пользователь уже дал согласие и залогинен в Google в этом браузере.
+ * Получение токена.
  *
- * Параллельные вызовы разделяют один запрос: раньше второй просто падал с ошибкой,
- * хотя ему достаточно было дождаться результата первого.
+ * Всегда prompt: '' + login_hint с известной почтой: если человек залогинен в Google
+ * и согласие уже давал, окно закрывается само за долю секунды — никакого выбора
+ * аккаунта и «входа» глазами пользователя. Экран согласия Google показывает сам,
+ * только когда его действительно не хватает. Раньше здесь стоял select_account,
+ * и каждое переподключение выглядело как полноценный логин — это и был «бред».
+ *
+ * Параллельные вызовы разделяют один запрос.
  */
-export async function getAccessToken(interactive: boolean): Promise<string> {
-  if (hasToken()) return accessToken
+export async function getAccessToken(_interactive: boolean, promptMode: '' | 'select_account' = ''): Promise<string> {
+  if (promptMode === '' && hasToken()) return accessToken
   const client = await ensureTokenClient()
   if (inFlight) return inFlight
 
   inFlight = new Promise<string>((resolve, reject) => {
     pending = { resolve, reject }
     try {
-      /*
-       * prompt: '' — Google сам покажет экран согласия, если его ещё не давали.
-       * Форсировать 'consent' при каждом подключении незачем: это лишний экран
-       * для человека, который уже всё разрешил. Смену аккаунта делаем через
-       * select_account.
-       */
-      client.requestAccessToken({ prompt: interactive ? 'select_account' : '' })
+      const hint = getSavedEmail()
+      client.requestAccessToken({
+        prompt: promptMode,
+        ...(promptMode === '' && hint ? { hint } : {}),
+      })
     } catch (error) {
       pending = null
       reject(error instanceof Error ? error : new DriveError(String(error), true))
@@ -205,7 +222,16 @@ export async function getAccessToken(interactive: boolean): Promise<string> {
   }
 }
 
+/** Явная смена аккаунта — единственное место, где нужен выбор из списка. */
+export function switchAccount(): Promise<string> {
+  accessToken = ''
+  expiresAt = 0
+  localStorage.removeItem(TOKEN_KEY)
+  return getAccessToken(true, 'select_account')
+}
+
 export function signOut(): void {
+  localStorage.removeItem(TOKEN_KEY)
   const token = accessToken
   accessToken = ''
   expiresAt = 0

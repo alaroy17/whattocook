@@ -105,7 +105,8 @@ function CategoryManager() {
 }
 
 export function SettingsPage() {
-  const { db, sync, connect, connecting, disconnect, syncNow, updateSettings, replaceDatabase } = useStore()
+  const { db, sync, connect, connecting, disconnect, switchAccount, syncNow, updateSettings, replaceDatabase } =
+    useStore()
   const [shareEmail, setShareEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -275,9 +276,21 @@ export function SettingsPage() {
               </div>
 
               <div className="divider" />
-              <button className="btn btn-block" onClick={disconnect}>
-                Отключить аккаунт
-              </button>
+              <div className="row">
+                <button
+                  className="btn grow"
+                  onClick={() => {
+                    void switchAccount().catch((error: unknown) =>
+                      toast(error instanceof Error ? error.message : 'Не удалось сменить аккаунт'),
+                    )
+                  }}
+                >
+                  Сменить аккаунт
+                </button>
+                <button className="btn grow" onClick={disconnect}>
+                  Отключить
+                </button>
+              </div>
             </div>
           )}
         </section>

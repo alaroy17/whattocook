@@ -43,6 +43,8 @@ interface StoreValue {
   /** Открыто окно входа Google — интерфейс показывает ожидание. */
   connecting: boolean
   disconnect: () => void
+  /** Войти другим Google-аккаунтом — единственный случай с выбором из списка. */
+  switchAccount: () => Promise<void>
   syncNow: () => Promise<void>
   /** Создать базу на своём Диске — когда общей нет и её никто не откроет. */
   createDatabase: () => Promise<void>
@@ -75,11 +77,10 @@ function stamp<T extends Syncable>(existing: T | undefined, patch: Partial<T>, i
 }
 
 /**
- * Почту запоминаем на устройстве. Иначе до первого ответа Google «кто вы»
- * вычислить не из чего, и имя в шапке прыгало: локальный выбор → привязка
+ * Почту запоминаем на устройстве (drive.saveEmail). Иначе до первого ответа Google
+ * «кто вы» вычислить не из чего, и имя в шапке прыгало: локальный выбор → привязка
  * по почте → снова локальный выбор, если очередной запрос почты не удался.
  */
-const EMAIL_KEY = 'wtc.google.email'
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Database>(() => loadLocal() ?? emptyDatabase())
@@ -93,7 +94,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       status: drive.getClientId() ? (lastSyncAt ? 'syncing' : 'offline') : 'unconfigured',
       message: '',
       lastSyncAt,
-      email: localStorage.getItem(EMAIL_KEY),
+      email: drive.getSavedEmail(),
     }
   })
 
@@ -178,17 +179,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
          * Почту спрашиваем только если её ещё не знаем, и никогда не затираем
          * уже известную неудачным запросом — иначе привязанное имя мигает.
          */
-        let email = sync.email ?? localStorage.getItem(EMAIL_KEY)
+        let email = sync.email ?? drive.getSavedEmail()
         if (!email) {
           email = await drive.fetchUserInfo().then((info) => info.email).catch(() => null)
         }
-        if (email) localStorage.setItem(EMAIL_KEY, email)
+        if (email) drive.saveEmail(email)
         setSync({ status: 'idle', message: '', lastSyncAt: at, email })
       } catch (error) {
         // Базы нет ни своей, ни общей — спрашиваем пользователя, а не создаём вторую молча.
         if (error instanceof drive.NoDatabaseError) {
           const email = await drive.fetchUserInfo().then((info) => info.email).catch(() => null)
-          if (email) localStorage.setItem(EMAIL_KEY, email)
+          if (email) drive.saveEmail(email)
           setSync((s) => ({ ...s, status: 'no-database', message: '', email: email ?? s.email }))
           return
         }
@@ -265,6 +266,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  /*
+   * Тихое продление входа. Окно Google браузер разрешает открывать только
+   * в ответ на действие пользователя, поэтому попытка при загрузке блокируется —
+   * из-за этого и казалось, что «надо логиниться каждый раз». Ловим первое
+   * касание после запуска: окно открывается с правами жеста, Google видит живую
+   * сессию и закрывает его сам за долю секунды.
+   */
+  const retryAt = useRef(0)
+  useEffect(() => {
+    const onGesture = () => {
+      if (!drive.getClientId() || drive.hasToken()) return
+      if (!localStorage.getItem('wtc.lastSyncAt')) return
+      if (Date.now() < retryAt.current) return
+      retryAt.current = Date.now() + 5 * 60_000
+      void runSyncRef.current(false)
+    }
+    window.addEventListener('pointerdown', onGesture, true)
+    return () => window.removeEventListener('pointerdown', onGesture, true)
+  }, [])
+
   /** Аккаунт, под которым вошли, сопоставляем с Сашей или Андреем. */
   const boundUser = useMemo<UserId | null>(() => {
     const email = sync.email?.trim().toLowerCase()
@@ -326,8 +347,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       disconnect: () => {
         drive.signOut()
         drive.forgetFile()
-        localStorage.removeItem(EMAIL_KEY)
+        localStorage.removeItem('wtc.google.email')
         setSync((s) => ({ ...s, status: 'offline', email: null, message: '' }))
+      },
+      switchAccount: async () => {
+        await drive.switchAccount()
+        localStorage.removeItem('wtc.google.email')
+        drive.forgetFile()
+        setSync((s) => ({ ...s, email: null }))
+        await runSyncRef.current(false)
       },
       syncNow: () => runSyncRef.current(false),
       createDatabase: async () => {
