@@ -13,22 +13,22 @@ import {
   type Suggestion,
 } from '../lib/suggest'
 import { RecipeRow, Thumb } from '../components/RecipeRow'
-import { Avatar, Chips, Empty, Segmented, toast } from '../components/ui'
+import { Chips, Empty, Segmented, toast } from '../components/ui'
 import { EntryEditor } from '../components/EntryEditor'
 import { ConnectNotice } from '../components/ConnectNotice'
 import { RecipeEditor } from '../components/RecipeEditor'
-import { IconCheck, IconDice, IconFridge, IconPlus, IconRefresh, IconRepeat } from '../components/Icons'
+import { IconDice, IconFridge, IconPlus, IconRefresh, IconRepeat } from '../components/Icons'
 import { MEAL_SLOTS } from '../types'
-import { agoWord, classNames, daysWord, intervalWord } from '../lib/util'
+import { agoWord, daysWord, intervalWord } from '../lib/util'
 import { categoriesWithRecipes } from '../lib/categories'
 import { fridgeNeedsReview, fridgeStaleDays } from '../lib/fridge'
 import { entryForRecipeOn } from '../lib/entries'
-import { SwipeRow } from '../components/SwipeRow'
+import { EntryRow } from '../components/EntryRow'
 
 type Mode = 'smart' | 'random'
 
 export function Today() {
-  const { db, saveEntry, remove, restore } = useStore()
+  const { db, saveEntry } = useStore()
   const navigate = useNavigate()
   const date = today()
 
@@ -71,9 +71,6 @@ export function Today() {
   const totalRecipes = alive(db.recipes).filter((recipe) => !recipe.archived).length
   const needsFridge = fridgeNeedsReview(db)
   const stale = fridgeStaleDays(db)
-
-  const nameOf = (entryRecipeId: string | undefined, title: string | undefined) =>
-    (entryRecipeId ? db.recipes[entryRecipeId]?.name : title) ?? 'Без названия'
 
   const mealName = (meal: string) => MEAL_SLOTS.find((slot) => slot.id === meal)?.name ?? ''
 
@@ -153,90 +150,8 @@ export function Today() {
               или удалить. Никаких форм по тапу.
             */}
             <div className="card-flat">
-              {todayEntries.map((entry) => {
-                const recipe = entry.recipeId ? db.recipes[entry.recipeId] : undefined
-                return (
-                  <SwipeRow
-                    key={entry.id}
-                    actions={[
-                      { label: 'Изменить', kind: 'normal', onClick: () => setEditingEntry(entry.id) },
-                      {
-                        label: 'Удалить',
-                        kind: 'danger',
-                        onClick: () => {
-                          remove('entries', entry.id)
-                          toast('Запись удалена', {
-                            label: 'Отменить',
-                            onClick: () => restore('entries', entry.id),
-                          })
-                        },
-                      },
-                    ]}
-                  >
-                    <div
-                      className="recipe-row"
-                      onClick={() =>
-                        recipe && !recipe.deletedAt
-                          ? navigate(`/recipes/${recipe.id}`)
-                          : setEditingEntry(entry.id)
-                      }
-                    >
-                      <button
-                        className={classNames('status-toggle', entry.status === 'done' && 'done')}
-                        aria-label={entry.status === 'done' ? 'Приготовлено' : 'Отметить приготовленным'}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          saveEntry({ id: entry.id, status: entry.status === 'done' ? 'planned' : 'done' })
-                        }}
-                      >
-                        {entry.status === 'done' && <IconCheck size={15} />}
-                      </button>
-                      <Thumb photoId={recipe?.photoId} />
-                      <div className="grow">
-                        <div
-                          className={classNames(
-                            'recipe-title ellipsis',
-                            entry.status === 'done' && 'done-title',
-                          )}
-                        >
-                          {nameOf(entry.recipeId, entry.title)}
-                        </div>
-                        <div className="meta">
-                          <span>{mealName(entry.meal)}</span>
-                          {entry.servings ? <span>{entry.servings} порц.</span> : null}
-                        </div>
-                      </div>
-                      {entry.cook && <Avatar id={entry.cook} />}
-                    </div>
-                  </SwipeRow>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
-        {regulars.length > 0 && (
-          <section className="section">
-            <div className="section-head">
-              <h2>
-                <span className="row" style={{ gap: 7 }}>
-                  <IconRepeat size={17} /> Постоянное
-                </span>
-              </h2>
-            </div>
-            <div className="regulars">
-              {regulars.map((item) => (
-                <button
-                  key={item.recipe.id}
-                  className={`regular-card${item.due ? ' due' : ''}`}
-                  onClick={() => logRegular(item.recipe.id)}
-                >
-                  <span className="name">{item.recipe.name}</span>
-                  <span className="small muted">{agoWord(item.days)}</span>
-                  <span className={`badge${item.due ? ' badge-accent' : ''}`}>
-                    {item.due ? 'пора' : intervalWord(item.interval)}
-                  </span>
-                </button>
+              {todayEntries.map((entry) => (
+                <EntryRow key={entry.id} entry={entry} onEdit={() => setEditingEntry(entry.id)} />
               ))}
             </div>
           </section>
@@ -360,6 +275,34 @@ export function Today() {
                     </button>
                   }
                 />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Постоянное — быстрые записи «съели как обычно», после блока решения */}
+        {regulars.length > 0 && (
+          <section className="section">
+            <div className="section-head">
+              <h2>
+                <span className="row" style={{ gap: 7 }}>
+                  <IconRepeat size={17} /> Постоянное
+                </span>
+              </h2>
+            </div>
+            <div className="regulars">
+              {regulars.map((item) => (
+                <button
+                  key={item.recipe.id}
+                  className={`regular-card${item.due ? ' due' : ''}`}
+                  onClick={() => logRegular(item.recipe.id)}
+                >
+                  <span className="name">{item.recipe.name}</span>
+                  <span className="small muted">{agoWord(item.days)}</span>
+                  <span className={`badge${item.due ? ' badge-accent' : ''}`}>
+                    {item.due ? 'пора' : intervalWord(item.interval)}
+                  </span>
+                </button>
               ))}
             </div>
           </section>

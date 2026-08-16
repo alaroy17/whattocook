@@ -206,31 +206,6 @@ export function RecipeDetail() {
           </button>
         </div>
 
-        <section className="section">
-          <div className="section-head">
-            <h2>Оценки</h2>
-          </div>
-          <div className="card">
-            {USERS.map((user) => (
-              <div className="row-between" key={user.id} style={{ padding: '5px 0' }}>
-                <span className="row" style={{ gap: 8 }}>
-                  <Avatar id={user.id} />
-                  {user.name}
-                </span>
-                <Stars
-                  value={recipe.ratings?.[user.id]}
-                  onChange={(value) =>
-                    saveRecipe({
-                      id: recipe.id,
-                      ratings: { ...recipe.ratings, [user.id]: value || undefined },
-                    })
-                  }
-                />
-              </div>
-            ))}
-          </div>
-        </section>
-
         {recipe.ingredients.length > 0 && (
           <section className="section">
             <div className="section-head">
@@ -318,6 +293,32 @@ export function RecipeDetail() {
             </a>
           </section>
         )}
+
+        {/* Оценки — после рецептурной части: готовящему сначала нужны ингредиенты и шаги */}
+        <section className="section">
+          <div className="section-head">
+            <h2>Оценки</h2>
+          </div>
+          <div className="card">
+            {USERS.map((user) => (
+              <div className="row-between" key={user.id} style={{ padding: '5px 0' }}>
+                <span className="row" style={{ gap: 8 }}>
+                  <Avatar id={user.id} />
+                  {user.name}
+                </span>
+                <Stars
+                  value={recipe.ratings?.[user.id]}
+                  onChange={(value) =>
+                    saveRecipe({
+                      id: recipe.id,
+                      ratings: { ...recipe.ratings, [user.id]: value || undefined },
+                    })
+                  }
+                />
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section className="section">
           <div className="section-head">

@@ -185,24 +185,6 @@ export function CalendarPage() {
               })}
             </div>
 
-            {legend.length > 0 && (
-              <div className="legend">
-                {legend.map((category) => (
-                  <span className="legend-item" key={category}>
-                    <span className="legend-swatch" style={{ background: categoryColor(category) }} />
-                    {category}
-                  </span>
-                ))}
-                <span className="legend-item">
-                  <span
-                    className="legend-swatch"
-                    style={{ background: 'transparent', border: '1px dashed var(--border-strong)' }}
-                  />
-                  в планах
-                </span>
-              </div>
-            )}
-
             <section className="section">
               <div className="section-head">
                 <h2>{formatDate(selected, { weekday: true })}</h2>
@@ -230,6 +212,25 @@ export function CalendarPage() {
                 </div>
               )}
             </section>
+
+            {/* Легенда — справка, ей место после содержимого, а не между сеткой и днём */}
+            {legend.length > 0 && (
+              <div className="legend">
+                {legend.map((category) => (
+                  <span className="legend-item" key={category}>
+                    <span className="legend-swatch" style={{ background: categoryColor(category) }} />
+                    {category}
+                  </span>
+                ))}
+                <span className="legend-item">
+                  <span
+                    className="legend-swatch"
+                    style={{ background: 'transparent', border: '1px dashed var(--border-strong)' }}
+                  />
+                  в планах
+                </span>
+              </div>
+            )}
           </>
         ) : (
           <>

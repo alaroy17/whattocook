@@ -5,7 +5,7 @@ import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
 import { PRODUCT_GROUPS, type Product } from '../types'
 import { Empty, Field, Sheet, toast } from '../components/ui'
-import { IconCheck, IconPlus, IconTag, IconTrash } from '../components/Icons'
+import { IconCheck, IconPlus, IconTag } from '../components/Icons'
 import { agoWord, countOf, normalizeName, nowIso } from '../lib/util'
 import { fridgeStaleDays } from '../lib/fridge'
 
@@ -72,19 +72,6 @@ export function Fridge() {
             ? 'список пуст'
             : `${countOf(atHome.length, 'product')}${stale != null ? ` · обновляли ${agoWord(stale)}` : ''}`
         }
-        actions={
-          <button
-            className="icon-btn"
-            title="Подтвердить, что список актуален"
-            aria-label="Список актуален"
-            onClick={() => {
-              updateSettings({ fridgeReviewedAt: nowIso() })
-              toast('Отметили, что список актуален')
-            }}
-          >
-            <IconCheck />
-          </button>
-        }
       />
 
       <main className="content">
@@ -148,16 +135,6 @@ export function Fridge() {
                   <div className="shop-item" key={product.id} onClick={() => setStock(product, false)}>
                     <input type="checkbox" readOnly checked />
                     <span className="grow shop-name">{product.name}</span>
-                    <button
-                      className="icon-btn"
-                      aria-label="Убрать"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        setStock(product, false)
-                      }}
-                    >
-                      <IconTrash size={16} />
-                    </button>
                   </div>
                 ))}
               </div>

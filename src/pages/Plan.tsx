@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
 import { addDays, dateRange, formatDate, formatDateShort, fromIsoDate, isWeekend, startOfWeek, today, WEEKDAYS_SHORT } from '../lib/date'
 import { categoryColor, MEAL_SLOTS, type Entry, type MealSlot, type Recipe } from '../types'
-import { Avatar, Chips, Empty, Segmented, toast } from '../components/ui'
+import { Avatar, Chips, Empty, Segmented, Sheet, toast } from '../components/ui'
 import { RecipePicker } from '../components/RecipePicker'
 import { EntryEditor } from '../components/EntryEditor'
 import {
@@ -17,17 +18,29 @@ import {
 import { buildProductIndex, servingsMultiplier } from '../lib/cost'
 import { entryForRecipeOn } from '../lib/entries'
 import { classNames, formatAmount, formatMoney } from '../lib/util'
-import { IconCart, IconCheck, IconChevronLeft, IconChevronRight, IconPlus } from '../components/Icons'
+import {
+  IconBook,
+  IconCart,
+  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
+  IconEdit,
+  IconPlus,
+  IconTrash,
+} from '../components/Icons'
 
 type Tab = 'week' | 'shopping'
 
 export function Plan() {
-  const { db, saveEntry } = useStore()
+  const { db, saveEntry, remove, restore } = useStore()
+  const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('week')
   const [weekStart, setWeekStart] = useState(() => startOfWeek(today()))
   const [picking, setPicking] = useState<string | null>(null)
   const [pickMeal, setPickMeal] = useState<MealSlot>('dinner')
   const [editing, setEditing] = useState<Entry | null>(null)
+  /** Тап по блюду в плане открывает выбор действий, а не сразу форму. */
+  const [action, setAction] = useState<Entry | null>(null)
   const [checked, setChecked] = useState<Set<string>>(() => loadChecked(startOfWeek(today())))
   const [hideInStock, setHideInStock] = useState(true)
 
@@ -181,7 +194,7 @@ export function Plan() {
                         <button
                           className="label"
                           style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit' }}
-                          onClick={() => setEditing(entry)}
+                          onClick={() => setAction(entry)}
                         >
                           {nameOf(entry)}
                         </button>
@@ -331,6 +344,57 @@ export function Plan() {
       )}
 
       {editing && <EntryEditor entry={editing} onClose={() => setEditing(null)} />}
+
+      {action && (
+        <Sheet title={nameOf(action)} onClose={() => setAction(null)}>
+          <div className="stack">
+            {action.recipeId && db.recipes[action.recipeId] && !db.recipes[action.recipeId].deletedAt && (
+              <button
+                className="btn btn-block"
+                onClick={() => {
+                  const id = action.recipeId!
+                  setAction(null)
+                  navigate(`/recipes/${id}`)
+                }}
+              >
+                <IconBook size={16} /> Открыть рецепт
+              </button>
+            )}
+            <button
+              className="btn btn-block"
+              onClick={() => {
+                saveEntry({ id: action.id, status: action.status === 'done' ? 'planned' : 'done' })
+                setAction(null)
+              }}
+            >
+              <IconCheck size={16} /> {action.status === 'done' ? 'Вернуть в план' : 'Приготовили'}
+            </button>
+            <button
+              className="btn btn-block"
+              onClick={() => {
+                setEditing(action)
+                setAction(null)
+              }}
+            >
+              <IconEdit size={16} /> Изменить
+            </button>
+            <button
+              className="btn btn-block btn-danger"
+              onClick={() => {
+                const removed = action
+                remove('entries', removed.id)
+                setAction(null)
+                toast('Убрали из плана', {
+                  label: 'Отменить',
+                  onClick: () => restore('entries', removed.id),
+                })
+              }}
+            >
+              <IconTrash size={16} /> Удалить
+            </button>
+          </div>
+        </Sheet>
+      )}
     </>
   )
 }
