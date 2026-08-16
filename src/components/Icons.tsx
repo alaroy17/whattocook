@@ -206,48 +206,7 @@ export const IconPot = (p: IconProps) => (
   </Base>
 )
 
-/**
- * Кошачьи мордочки для аватаров. Рисуются мелко (15–20 px), поэтому без усов
- * и мелких деталей. Оба уха всегда открыты — бантик у кошки маленький и стоит
- * в промежутке между ушами, ничего не перекрывая.
- */
-const CAT_HEAD = (
-  <>
-    {/* уши — треугольники, основание лежит на контуре головы */}
-    <path d="M7.4 8.5 6 4.4l4.2 2.3" />
-    <path d="M16.6 8.5 18 4.4l-4.2 2.3" />
-    <circle cx="12" cy="13" r="6.6" />
-    <circle cx="9.7" cy="12.4" r="0.95" fill="currentColor" stroke="none" />
-    <circle cx="14.3" cy="12.4" r="0.95" fill="currentColor" stroke="none" />
-    <path d="M12 14.8v.8" />
-    <path d="M10.6 16.6c.5.55 2.3.55 2.8 0" />
-  </>
-)
-
-/** Кошка — Саша: маленький бантик между ушами, уши свободны. */
-export const IconCatGirl = (p: IconProps) => (
-  <Base {...p}>
-    {CAT_HEAD}
-    <path d="M12 4.6 9.9 3.3v2.6z" />
-    <path d="M12 4.6l2.1-1.3v2.6z" />
-  </Base>
-)
-
-/** Кот — Андрей: та же морда без украшений, различие держат цвет и бантик кошки. */
-export const IconCatBoy = (p: IconProps) => (
-  <Base {...p}>{CAT_HEAD}</Base>
-)
-
-/** Лапка — метка «вместе». */
-export const IconPaw = (p: IconProps) => (
-  <Base {...p}>
-    <path d="M12 13.4c2.4 0 4.3 1.7 4.3 3.7 0 1.6-1.3 2.6-2.8 2.2-1-.3-2-.3-3 0-1.5.4-2.8-.6-2.8-2.2 0-2 1.9-3.7 4.3-3.7z" />
-    <ellipse cx="7.2" cy="10.4" rx="1.7" ry="2.1" />
-    <ellipse cx="16.8" cy="10.4" rx="1.7" ry="2.1" />
-    <ellipse cx="10.6" cy="6.6" rx="1.6" ry="2" />
-    <ellipse cx="14.6" cy="7.4" rx="1.5" ry="1.9" />
-  </Base>
-)
+/* Аватары-котики рисует components/AvatarArt.tsx — во весь круг, заливкой. */
 
 export const IconCopy = (p: IconProps) => (
   <Base {...p}>

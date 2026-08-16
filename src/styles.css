@@ -411,25 +411,18 @@ button {
   --andrei-soft: #1f3a42;
 }
 
+/* Аватар — картинка во весь круг, фон и черты рисует сам SVG */
 .avatar {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
+  overflow: hidden;
   flex: none;
   line-height: 0;
 }
 
-.avatar-sasha { background: var(--sasha-soft); color: var(--sasha); }
-.avatar-andrei { background: var(--andrei-soft); color: var(--andrei); }
-.avatar-both {
-  background: linear-gradient(105deg, var(--sasha-soft) 50%, var(--andrei-soft) 50%);
-  color: var(--text-2);
-}
-.avatar-outside { background: var(--bg-soft); color: var(--muted); }
-.avatar-lg { width: 34px; height: 34px; }
+.avatar-lg { width: 38px; height: 38px; }
 
 .chip-user { display: inline-flex; align-items: center; gap: 6px; padding-left: 7px; }
 

@@ -1,9 +1,9 @@
 /** Двое пользователей приложения. Идентификаторы зашиты — это семейное приложение. */
 export type UserId = 'sasha' | 'andrei'
 
-export const USERS: { id: UserId; name: string; short: string; figure: 'female' | 'male' }[] = [
-  { id: 'sasha', name: 'Саша', short: 'С', figure: 'female' },
-  { id: 'andrei', name: 'Андрей', short: 'А', figure: 'male' },
+export const USERS: { id: UserId; name: string; short: string }[] = [
+  { id: 'sasha', name: 'Саша', short: 'С' },
+  { id: 'andrei', name: 'Андрей', short: 'А' },
 ]
 
 export function userName(id: string | undefined | null): string {

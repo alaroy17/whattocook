@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { IconCatBoy, IconCatGirl, IconClose, IconPaw, IconSearch, IconStar } from './Icons'
+import { IconClose, IconSearch, IconStar } from './Icons'
+import { AvatarArt } from './AvatarArt'
 import { classNames } from '../lib/util'
 import { USERS, userName } from '../types'
 
@@ -182,28 +183,15 @@ export function Avatar({
   withName?: boolean
 }) {
   const user = USERS.find((u) => u.id === id)
-  const kind = user ? user.id : id === 'outside' ? 'outside' : 'both'
-  const size = large ? 20 : 15
-
-  const glyph = user ? (
-    user.figure === 'female' ? (
-      <IconCatGirl size={size} />
-    ) : (
-      <IconCatBoy size={size} />
-    )
-  ) : id === 'outside' ? (
-    <IconClose size={size} />
-  ) : (
-    <IconPaw size={size} />
-  )
+  const variant = user ? user.id : id === 'outside' ? 'outside' : 'both'
 
   const badge = (
     <span
-      className={classNames('avatar', `avatar-${kind}`, large && 'avatar-lg')}
+      className={classNames('avatar', large && 'avatar-lg')}
       title={userName(id)}
       aria-label={userName(id)}
     >
-      {glyph}
+      <AvatarArt variant={variant} />
     </span>
   )
 
