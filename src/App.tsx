@@ -5,7 +5,7 @@ import { ToastHost } from './components/ui'
 import { IdentityPrompt } from './components/IdentityPrompt'
 import { NoDatabasePrompt } from './components/NoDatabasePrompt'
 import { applyUpdate, onUpdateReady } from './lib/updates'
-import { IconCalendar, IconFridge, IconHome, IconList, IconMore } from './components/Icons'
+import { IconBook, IconCalendar, IconFridge, IconHome, IconList, IconMore } from './components/Icons'
 import { Today } from './pages/Today'
 import { Recipes } from './pages/Recipes'
 import { RecipeDetail } from './pages/RecipeDetail'
@@ -23,6 +23,7 @@ import { fridgeNeedsReview } from './lib/fridge'
 
 const TABS = [
   { to: '/', label: 'Сегодня', Icon: IconHome, end: true },
+  { to: '/recipes', label: 'Рецепты', Icon: IconBook, end: false },
   { to: '/plan', label: 'Неделя', Icon: IconList, end: false },
   { to: '/calendar', label: 'Календарь', Icon: IconCalendar, end: false },
   { to: '/fridge', label: 'Дома', Icon: IconFridge, end: false },
@@ -76,10 +77,16 @@ export function App() {
 
       <nav className="tabbar">
         {TABS.map(({ to, label, Icon, end }) => (
-          <NavLink key={to} to={to} end={end} className={({ isActive }) => classNames(isActive && 'active')}>
-            <Icon size={20} />
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            aria-label={label}
+            title={label}
+            className={({ isActive }) => classNames(isActive && 'active')}
+          >
+            <Icon size={23} />
             {to === '/fridge' && fridgeAlert && <span className="tab-dot" />}
-            <span>{label}</span>
           </NavLink>
         ))}
       </nav>

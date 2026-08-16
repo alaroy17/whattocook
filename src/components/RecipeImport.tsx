@@ -42,8 +42,7 @@ export function RecipeImport({ onClose }: { onClose: () => void }) {
     <Sheet title="Импорт рецепта" onClose={onClose}>
       <div className="stack">
         <div className="small muted">
-          Скопируйте запрос, вставьте его в любой чат-бот и допишите ссылку на рецепт или его текст.
-          Ответ бота вставьте сюда.
+          Вставьте запрос в любой чат-бот вместе с рецептом, ответ верните сюда.
         </div>
 
         <button className="btn btn-block" onClick={copyPrompt}>
@@ -115,10 +114,6 @@ export function RecipeImport({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="small muted">
-          Проверьте, что бот не выдумал количества: если в рецепте их не было, полей просто не будет —
-          это нормально, приложение не требует граммов.
-        </div>
       </div>
     </Sheet>
   )

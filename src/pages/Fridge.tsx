@@ -6,7 +6,7 @@ import { alive } from '../lib/db'
 import { PRODUCT_GROUPS, type Product } from '../types'
 import { Empty, Field, Sheet, toast } from '../components/ui'
 import { IconCheck, IconPlus, IconTag, IconTrash } from '../components/Icons'
-import { agoWord, classNames, countOf, normalizeName, nowIso } from '../lib/util'
+import { agoWord, countOf, normalizeName, nowIso } from '../lib/util'
 import { fridgeStaleDays } from '../lib/fridge'
 
 export function Fridge() {
@@ -138,10 +138,7 @@ export function Fridge() {
         )}
 
         {atHome.length === 0 ? (
-          <Empty
-            title="Холодильник пуст"
-            text="Отметьте, что есть дома — приложение будет предлагать блюда из этих продуктов и вычитать их из списка покупок"
-          />
+          <Empty title="Пока пусто" text="Отметьте продукты, которые есть дома" />
         ) : (
           grouped.map(([group, items]) => (
             <div key={group}>
@@ -172,7 +169,6 @@ export function Fridge() {
           <section className="section">
             <div className="section-head">
               <h2>Обычно берём</h2>
-              <span className="small muted">нажмите, чтобы добавить</span>
             </div>
             <div className="chips" style={{ flexWrap: 'wrap' }}>
               {common.map(({ product }) => (
@@ -232,7 +228,6 @@ function QuickProduct({ name, onClose }: { name: string; onClose: () => void }) 
             ))}
           </select>
         </Field>
-        <div className={classNames('small', 'muted')}>Цену можно указать позже в каталоге продуктов</div>
         <div className="row">
           <button className="btn grow" onClick={onClose}>
             Отмена

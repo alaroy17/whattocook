@@ -85,11 +85,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Database>(() => loadLocal() ?? emptyDatabase())
   const [localMe, setLocalMe] = useState<UserId>(() => (localStorage.getItem(ME_KEY) as UserId) || 'andrei')
   const [connecting, setConnecting] = useState(false)
-  const [sync, setSync] = useState<SyncState>({
-    status: drive.getClientId() ? 'offline' : 'unconfigured',
-    message: '',
-    lastSyncAt: localStorage.getItem('wtc.lastSyncAt'),
-    email: localStorage.getItem(EMAIL_KEY),
+  const [sync, setSync] = useState<SyncState>(() => {
+    const lastSyncAt = localStorage.getItem('wtc.lastSyncAt')
+    return {
+      // Уже синхронизировались раньше — при загрузке сразу «syncing», без кадра «offline»:
+      // runSync стартует немедленно, а мигающие статусы в шапке выглядят как поломка.
+      status: drive.getClientId() ? (lastSyncAt ? 'syncing' : 'offline') : 'unconfigured',
+      message: '',
+      lastSyncAt,
+      email: localStorage.getItem(EMAIL_KEY),
+    }
   })
 
   const dbRef = useRef(db)
@@ -270,6 +275,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const me = boundUser ?? localMe
   const needsIdentity = Boolean(sync.email) && !boundUser
+
+  /*
+   * Вычисленную по почте личность запоминаем и как локальный выбор.
+   * Тогда даже кадры до прихода почты показывают того же человека,
+   * что и в прошлый раз, — имя в шапке не «переключается» при загрузке.
+   */
+  useEffect(() => {
+    if (boundUser && boundUser !== localMe) {
+      localStorage.setItem(ME_KEY, boundUser)
+      setLocalMe(boundUser)
+    }
+  }, [boundUser, localMe])
 
   const value = useMemo<StoreValue>(() => {
     const setMe = (id: UserId) => {

@@ -94,11 +94,6 @@ export function Trash() {
           />
         ) : (
           <>
-            <div className="small muted" style={{ marginBottom: 10 }}>
-              Удалённое хранится {daysWord(TOMBSTONE_DAYS)}, потом исчезает совсем. Восстановление
-              вернёт запись и на устройстве второго человека.
-            </div>
-
             <div className="card-flat">
               {items.map((item) => (
                 <div className="shop-item" key={`${item.collection}:${item.id}`} style={{ cursor: 'default' }}>

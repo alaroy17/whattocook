@@ -213,7 +213,7 @@ export function SettingsPage() {
                     <Avatar id={user.id} />
                     <span className="grow">
                       {user.name}
-                      <div className="small muted ellipsis">{bound ?? 'аккаунт ещё не привязан'}</div>
+                      <div className="small muted ellipsis">{bound ?? 'не привязан'}</div>
                     </span>
                     {bound && bound.toLowerCase() === sync.email?.toLowerCase() && (
                       <span className="badge badge-accent">это вы</span>
@@ -221,10 +221,6 @@ export function SettingsPage() {
                   </div>
                 )
               })}
-              <div className="small muted" style={{ marginTop: 8 }}>
-                Привязка происходит сама при первом входе с нового аккаунта
-              </div>
-
               <div className="divider" />
 
               <strong style={{ fontSize: 14 }}>Доступ к папке «{drive.APP_FOLDER_NAME}»</strong>
@@ -245,7 +241,7 @@ export function SettingsPage() {
               )}
 
               <div style={{ marginTop: 10 }}>
-                <Field label="Пригласить" hint="Придёт письмо со ссылкой на общую папку">
+                <Field label="Пригласить">
                   <div className="row">
                     <input
                       className="input grow"
@@ -374,13 +370,8 @@ export function SettingsPage() {
         <section className="section">
           <div className="section-head">
             <h2>Данные</h2>
-            <span className="small muted">обычно не нужно</span>
           </div>
           <div className="card stack">
-            <div className="small muted">
-              От случайного удаления защищают «Корзина» и «История версий» — файл скачивать
-              для этого не требуется.
-            </div>
             <button className="btn btn-block" onClick={exportJson}>
               Скачать копию файлом
             </button>

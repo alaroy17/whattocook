@@ -32,6 +32,12 @@ export function TopBar({
   const { me, setMe, sync, identityLocked, connecting } = useStore()
   const name = USERS.find((user) => user.id === me)?.name
   const syncLabel = connecting ? 'Ждём входа в Google…' : SYNC_TEXT[sync.status]
+  /*
+   * Фоновое обновление после уже случавшихся синхронизаций — не событие,
+   * о нём не пишем. Статус в шапке появляется, только когда синхронизации
+   * ещё не было ни разу или что-то действительно сломалось.
+   */
+  const quiet = sync.status === 'idle' || (sync.status === 'syncing' && sync.lastSyncAt !== null)
 
   return (
     <header className="topbar">
@@ -50,7 +56,7 @@ export function TopBar({
         {subtitle ? (
           <div className="topbar-sub">{subtitle}</div>
         ) : (
-          (sync.status !== 'idle' || connecting) && (
+          (!quiet || connecting) && (
             <div className="topbar-sub row" style={{ gap: 5 }}>
               <span className={classNames('sync-dot', connecting ? 'syncing' : sync.status)} />
               {syncLabel}

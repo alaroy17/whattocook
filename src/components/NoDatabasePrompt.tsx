@@ -37,13 +37,6 @@ export function NoDatabasePrompt() {
         >
           Мне открыли доступ — проверить ещё раз
         </button>
-        <div className="small muted">
-          Выберите это, если второй человек уже отправил приглашение. Письмо со ссылкой нужно
-          сначала открыть — папка появится в «Доступные мне».
-        </div>
-
-        <div className="divider" />
-
         <button
           className="btn btn-primary btn-block"
           disabled={busy}
@@ -51,11 +44,6 @@ export function NoDatabasePrompt() {
         >
           Создать новую базу
         </button>
-        <div className="small muted">
-          Подходит, если вы первый и настраиваете приложение с нуля. Если общая база уже
-          существует, вторая приведёт к тому, что рецепты разъедутся на две половины.
-        </div>
-
         <button className="btn btn-ghost btn-block" onClick={disconnect}>
           Отключить аккаунт
         </button>

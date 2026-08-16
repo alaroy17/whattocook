@@ -152,7 +152,6 @@ export function Today() {
                   <IconRepeat size={17} /> Постоянное
                 </span>
               </h2>
-              <span className="small muted">нажмите, чтобы записать</span>
             </div>
             <div className="regulars">
               {regulars.map((item) => (
@@ -237,7 +236,7 @@ export function Today() {
           ) : totalRecipes === 0 ? (
             <Empty
               title="Пока нечего предложить"
-              text="Добавьте несколько блюд — и приложение начнёт подсказывать, что вы давно не готовили"
+              text="Добавьте первые блюда"
               action={
                 <button className="btn btn-primary" onClick={() => setCreating(true)}>
                   <IconPlus size={16} /> Добавить блюдо
@@ -246,12 +245,7 @@ export function Today() {
             />
           ) : (
             <Empty
-              title={recent.length > 0 ? 'Всё это готовили недавно' : 'В этом разделе пока пусто'}
-              text={
-                recent.length > 0
-                  ? `Блюда из этого раздела попадали на стол в последние ${daysWord(db.settings.cooldownDays)}. Можно посмотреть их ниже или выбрать другой раздел.`
-                  : 'Добавьте сюда блюдо или выберите другой раздел'
-              }
+              title={recent.length > 0 ? 'Всё это готовили недавно' : 'В этом разделе пусто'}
               action={
                 recent.length > 0 ? (
                   <button className="btn" onClick={() => setShowRecent(true)}>

@@ -175,18 +175,18 @@ export function RecipeEditor({
           </div>
         </Field>
 
-        <Field label="Теги" hint="Через запятую: острое, постное, на праздник">
-          <input className="input" value={tags} onChange={(e) => setTags(e.target.value)} />
+        <Field label="Теги">
+          <input
+            className="input"
+            placeholder="острое, постное, на праздник"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+          />
         </Field>
 
         <div className="card" style={{ padding: '4px 14px' }}>
           <label className="switch">
-            <span>
-              Едим регулярно
-              <div className="small muted">
-                Такие блюда живут отдельным списком на главной и предлагаются по своему ритму
-              </div>
-            </span>
+            <span>Едим регулярно</span>
             <input type="checkbox" checked={regular} onChange={(e) => setRegular(e.target.checked)} />
           </label>
           {regular && (
@@ -235,9 +235,6 @@ export function RecipeEditor({
                   setIngredients(parseIngredientList(event.target.value))
                 }}
               />
-              <div className="small muted">
-                По продукту в строке. Количество можно не писать — «Помидоры» тоже подойдёт.
-              </div>
             </>
           ) : (
             <>
@@ -294,9 +291,6 @@ export function RecipeEditor({
               >
                 <IconPlus size={15} /> Ингредиент
               </button>
-              <div className="small muted" style={{ marginTop: 6 }}>
-                Количество и единица необязательны
-              </div>
             </>
           )}
         </div>
@@ -305,7 +299,7 @@ export function RecipeEditor({
           <textarea className="input" value={steps} onChange={(e) => setSteps(e.target.value)} />
         </Field>
 
-        <Field label="Ссылка на рецепт" hint="Необязательно">
+        <Field label="Ссылка на рецепт">
           <input className="input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
         </Field>
 

@@ -51,18 +51,9 @@ export function History() {
       />
       <main className="content">
         {!connected ? (
-          <Empty
-            title="Нужен Google Drive"
-            text="Копии базы хранятся в папке «История» рядом с самой базой — без подключения их негде взять"
-          />
+          <Empty title="Нужен вход в Google" text="Копии хранятся на Диске в папке «История»" />
         ) : (
           <>
-            <div className="small muted" style={{ marginBottom: 12, lineHeight: 1.6 }}>
-              Раз в сутки приложение само сохраняет копию базы на Диск. Восстановление вернёт то,
-              что после выбранной даты удалили или потеряли. Всё, что появилось или менялось
-              позже, остаётся нетронутым — свежие правки не откатываются.
-            </div>
-
             {error && (
               <div className="small" style={{ color: '#b0432f', marginBottom: 10 }}>
                 {error}
@@ -81,10 +72,7 @@ export function History() {
             {snapshots === null ? (
               <div className="small muted">Загружаем…</div>
             ) : snapshots.length === 0 ? (
-              <Empty
-                title="Копий пока нет"
-                text="Первая появится при следующей синхронизации"
-              />
+              <Empty title="Копий пока нет" text="Первая появится сегодня при синхронизации" />
             ) : (
               <div className="card-flat">
                 {snapshots.map((snapshot) => (

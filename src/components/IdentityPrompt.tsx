@@ -12,8 +12,7 @@ export function IdentityPrompt() {
   return (
     <Sheet title="Кто вы?" onClose={() => undefined} dismissible={false}>
       <p className="muted small" style={{ marginTop: 0 }}>
-        Вошли как <strong>{sync.email}</strong>. Скажите один раз, чей это аккаунт — дальше
-        приложение будет узнавать вас само, и переключать вручную не придётся.
+        Чей аккаунт <strong>{sync.email}</strong>?
       </p>
       <div className="stack" style={{ marginTop: 14 }}>
         {USERS.map((user) => (
@@ -30,11 +29,8 @@ export function IdentityPrompt() {
       </div>
       {/* Без этой кнопки вход не тем аккаунтом превращается в тупик: окно перекрывает всё. */}
       <button className="btn btn-ghost btn-block" style={{ marginTop: 12 }} onClick={disconnect}>
-        Это не мой аккаунт — отключить
+        Это не мой аккаунт
       </button>
-      <div className="small muted" style={{ marginTop: 8, textAlign: 'center' }}>
-        Ошиблись именем — поменять можно в разделе «Ещё»
-      </div>
     </Sheet>
   )
 }

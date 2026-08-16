@@ -4,7 +4,6 @@ import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
 import {
-  IconBook,
   IconChart,
   IconChevronRight,
   IconClock,
@@ -45,7 +44,6 @@ export function More() {
   const { db, me, setMe, sync, identityLocked } = useStore()
   const [rebinding, setRebinding] = useState(false)
 
-  const recipes = alive(db.recipes).length
   const entries = alive(db.entries).filter((entry) => entry.status === 'done').length
   const products = alive(db.products).length
   // Второй привязанный человек — именно второй, а не всегда «Саша».
@@ -62,50 +60,36 @@ export function More() {
       <TopBar title="Ещё" showUser={false} />
       <main className="content">
         <div className="card">
-          <div className="small muted">Сейчас в приложении</div>
-          <div className="row" style={{ marginTop: 8, gap: 8 }}>
-            {USERS.map((user) => (
-              <button
-                key={user.id}
-                className={classNames('chip', 'chip-user', `chip-${user.id}`, me === user.id && 'active')}
-                /* При привязанном аккаунте переключение перенесло бы почту на другого
-                   человека — поэтому требуем подтверждение. */
-                disabled={identityLocked && me !== user.id && !rebinding}
-                onClick={() => setMe(user.id)}
-              >
-                <Avatar id={user.id} />
-                {user.name}
+          <div className="row-between">
+            <div className="row" style={{ gap: 8 }}>
+              {USERS.map((user) => (
+                <button
+                  key={user.id}
+                  className={classNames('chip', 'chip-user', `chip-${user.id}`, me === user.id && 'active')}
+                  /* При привязанном аккаунте переключение перенесло бы почту на другого
+                     человека — поэтому по умолчанию заблокировано. */
+                  disabled={identityLocked && me !== user.id && !rebinding}
+                  onClick={() => setMe(user.id)}
+                >
+                  <Avatar id={user.id} />
+                  {user.name}
+                </button>
+              ))}
+            </div>
+            {identityLocked && !rebinding && (
+              <button className="btn btn-sm btn-ghost" onClick={() => setRebinding(true)}>
+                Изменить
               </button>
-            ))}
+            )}
           </div>
-          <div className="small muted" style={{ marginTop: 8 }}>
-            {identityLocked && sync.email
-              ? `Аккаунт ${sync.email} закреплён за этим человеком — на другом устройстве с тем же входом вас узнают автоматически`
-              : 'От этого зависит, чьи заметки и оценки вы оставляете'}
-          </div>
-          {identityLocked && !rebinding && (
-            <button
-              className="btn btn-sm btn-ghost"
-              style={{ marginTop: 4, paddingLeft: 0 }}
-              onClick={() => setRebinding(true)}
-            >
-              Это не тот человек — перепривязать
-            </button>
-          )}
         </div>
 
         <div className="group-title">Кухня</div>
         <div className="card-flat">
           <MenuRow
-            icon={<IconBook size={19} />}
-            title="Рецепты"
-            hint={countOf(recipes, 'dish')}
-            onClick={() => navigate('/recipes')}
-          />
-          <MenuRow
             icon={<IconTag size={19} />}
             title="Продукты и цены"
-            hint={`${countOf(products, 'product')} в каталоге`}
+            hint={countOf(products, 'product')}
             onClick={() => navigate('/more/products')}
           />
           <MenuRow

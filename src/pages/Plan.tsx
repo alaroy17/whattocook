@@ -270,10 +270,7 @@ export function Plan() {
                     <span className="row" style={{ gap: 7 }}>
                       <IconCart size={18} /> Осталось купить
                     </span>
-                    <strong>{formatMoney(totalCost, db.settings.currency)}</strong>
-                  </div>
-                  <div className="small muted" style={{ marginTop: 4 }}>
-                    Цены берутся из каталога продуктов — то, чего там нет, в сумму не попадает
+                    <strong>~{formatMoney(totalCost, db.settings.currency)}</strong>
                   </div>
                 </div>
 

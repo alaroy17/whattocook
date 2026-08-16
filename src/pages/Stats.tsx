@@ -247,9 +247,6 @@ export function Stats() {
                           : timesWord(item.times),
                     }))}
                   />
-                  <div className="small muted" style={{ marginTop: 8 }}>
-                    Как часто продукт попадал на стол и во сколько примерно обошёлся по ценам каталога
-                  </div>
                 </div>
               </section>
             )}

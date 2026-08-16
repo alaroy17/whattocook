@@ -168,49 +168,38 @@ button {
   border-top: 1px solid var(--border);
 }
 
+/* Вкладки без подписей: название раздела и так написано в заголовке страницы */
 .tabbar a {
   position: relative;
   flex: 1;
-  max-width: 110px;
+  max-width: 84px;
   min-width: 0;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 6px 2px 4px;
+  justify-content: center;
+  padding: 11px 0;
   border-radius: var(--radius-sm);
   color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 
-.tabbar a span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tabbar a.active {
+  color: var(--accent-text);
+  background: var(--accent-soft);
 }
 
 /* Точка-напоминание на вкладке «Дома» */
 .tab-dot {
   position: absolute;
-  top: 5px;
+  top: 7px;
   right: 50%;
-  margin-right: -14px;
+  margin-right: -16px;
   width: 7px;
   height: 7px;
   border-radius: 999px;
   background: var(--warn);
 }
 
-.tabbar a.active {
-  color: var(--accent-text);
-}
-
-.tabbar a.active svg {
-  stroke-width: 1.9;
-}
 
 /* ─── Карточки и списки ───────────────────────────────────────────────────── */
 .card {

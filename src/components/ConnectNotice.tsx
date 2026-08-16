@@ -34,10 +34,7 @@ export function ConnectNotice() {
       <div className="notice">
         <IconCloud size={20} />
         <div className="grow small">
-          <strong>Ждём подтверждения в окне Google</strong>
-          <div className="muted">
-            Выберите аккаунт в открывшемся окне. Если окно закрылось — нажмите «Войти» ещё раз.
-          </div>
+          <strong>Подтвердите вход в окне Google</strong>
         </div>
       </div>
     )
@@ -47,12 +44,7 @@ export function ConnectNotice() {
     <div className="notice">
       <IconCloud size={20} />
       <div className="grow small">
-        <strong>{expired ? 'Вход в Google истёк' : 'Общая база не подключена'}</strong>
-        <div className="muted">
-          {expired
-            ? 'Правки сохраняются здесь и уедут после входа'
-            : 'Сейчас рецепты видны только на этом устройстве'}
-        </div>
+        <strong>{expired ? 'Вход в Google истёк' : 'Нет синхронизации'}</strong>
       </div>
       <button className="btn btn-sm btn-primary" onClick={signIn}>
         Войти
