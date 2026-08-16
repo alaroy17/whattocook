@@ -78,6 +78,7 @@ export function forgetFile(): void {
   localStorage.removeItem(FILE_ID_KEY)
   localStorage.removeItem(ROOT_FOLDER_KEY)
   localStorage.removeItem(PHOTO_FOLDER_KEY)
+  localStorage.removeItem('wtc.google.historyFolderId')
 }
 
 let gisReady: Promise<void> | null = null
@@ -387,6 +388,77 @@ export async function downloadPhoto(fileId: string): Promise<Blob> {
 
 export async function deleteFile(fileId: string): Promise<void> {
   await api(`/drive/v3/files/${fileId}`, { method: 'DELETE' })
+}
+
+/** Подпапка с автоматическими копиями базы. */
+export const HISTORY_FOLDER_NAME = 'История'
+const HISTORY_FOLDER_KEY = 'wtc.google.historyFolderId'
+
+async function resolveHistoryFolder(): Promise<string> {
+  const saved = localStorage.getItem(HISTORY_FOLDER_KEY)
+  if (saved) return saved
+  const found = await findByAppTag('history', FOLDER_MIME)
+  const id = found ? found.id : await createFolder(HISTORY_FOLDER_NAME, 'history', await resolveAppFolder())
+  localStorage.setItem(HISTORY_FOLDER_KEY, id)
+  return id
+}
+
+export interface SnapshotMeta {
+  id: string
+  name: string
+  /** Дата, за которую сделана копия (YYYY-MM-DD). */
+  date: string
+  modifiedTime: string
+  recipes: number
+  entries: number
+}
+
+export async function listSnapshots(): Promise<SnapshotMeta[]> {
+  const clauses = [
+    `appProperties has { key='app' and value='${APP_TAG}' }`,
+    `appProperties has { key='kind' and value='snapshot' }`,
+    'trashed=false',
+  ]
+  const query = encodeURIComponent(clauses.join(' and '))
+  const response = await api(
+    `/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,appProperties)&orderBy=name desc&pageSize=100`,
+  )
+  const data = (await response.json()) as {
+    files?: { id: string; name: string; modifiedTime: string; appProperties?: Record<string, string> }[]
+  }
+  return (data.files ?? []).map((file) => ({
+    id: file.id,
+    name: file.name,
+    date: file.appProperties?.date ?? file.name.replace(/\D+/g, '').slice(0, 8),
+    modifiedTime: file.modifiedTime,
+    recipes: Number(file.appProperties?.recipes ?? 0),
+    entries: Number(file.appProperties?.entries ?? 0),
+  }))
+}
+
+export async function createSnapshot(
+  date: string,
+  content: string,
+  counts: { recipes: number; entries: number },
+): Promise<void> {
+  const parent = await resolveHistoryFolder()
+  const body = multipartBody(
+    {
+      name: `${date}.json`,
+      parents: [parent],
+      mimeType: 'application/json',
+      appProperties: {
+        app: APP_TAG,
+        kind: 'snapshot',
+        date,
+        recipes: String(counts.recipes),
+        entries: String(counts.entries),
+      },
+    },
+    'application/json',
+    content,
+  )
+  await api('/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', body })
 }
 
 /**

@@ -2,10 +2,19 @@ import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
-import { IconBook, IconChart, IconChevronRight, IconCloud, IconSettings, IconTag } from '../components/Icons'
+import {
+  IconBook,
+  IconChart,
+  IconChevronRight,
+  IconClock,
+  IconCloud,
+  IconRefresh,
+  IconSettings,
+  IconTag,
+} from '../components/Icons'
 import { USERS } from '../types'
 import { Avatar } from '../components/ui'
-import { classNames } from '../lib/util'
+import { classNames, pluralRu } from '../lib/util'
 
 function MenuRow({
   icon,
@@ -20,14 +29,12 @@ function MenuRow({
 }) {
   return (
     <div className="recipe-row" onClick={onClick}>
-      <div className="thumb" style={{ width: 38, height: 38 }}>
-        {icon}
-      </div>
+      <div className="menu-icon">{icon}</div>
       <div className="grow">
         <div className="recipe-title">{title}</div>
         {hint && <div className="small muted">{hint}</div>}
       </div>
-      <IconChevronRight size={18} />
+      <IconChevronRight size={18} style={{ color: 'var(--muted)' }} />
     </div>
   )
 }
@@ -40,6 +47,10 @@ export function More() {
   const entries = alive(db.entries).filter((entry) => entry.status === 'done').length
   const products = alive(db.products).length
   const accountsBound = Object.values(db.settings.userEmails ?? {}).filter(Boolean).length
+  const trashed = [db.recipes, db.entries, db.products, db.comments].reduce(
+    (sum, collection) => sum + Object.values(collection).filter((item) => item.deletedAt).length,
+    0,
+  )
 
   return (
     <>
@@ -71,7 +82,7 @@ export function More() {
           <MenuRow
             icon={<IconBook size={19} />}
             title="Рецепты"
-            hint={`${recipes} блюд · поиск, фильтры, добавление`}
+            hint={`${recipes} ${pluralRu(recipes, ['блюдо', 'блюда', 'блюд'])}`}
             onClick={() => navigate('/recipes')}
           />
           <MenuRow
@@ -103,9 +114,24 @@ export function More() {
             onClick={() => navigate('/more/settings')}
           />
           <MenuRow
+            icon={<IconRefresh size={19} />}
+            title="Корзина"
+            hint={
+              trashed === 0
+                ? 'пусто'
+                : `${trashed} ${pluralRu(trashed, ['запись', 'записи', 'записей'])} можно вернуть`
+            }
+            onClick={() => navigate('/more/trash')}
+          />
+          <MenuRow
+            icon={<IconClock size={19} />}
+            title="История версий"
+            hint="Копии базы на Диске"
+            onClick={() => navigate('/more/history')}
+          />
+          <MenuRow
             icon={<IconSettings size={19} />}
             title="Настройки"
-            hint="Разделы, подсказки, тема, резервная копия"
             onClick={() => navigate('/more/settings')}
           />
         </div>

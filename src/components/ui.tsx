@@ -287,27 +287,50 @@ export function Confirm({
 }
 
 /** Простые всплывающие сообщения без внешних зависимостей. */
-let toastSetter: ((text: string) => void) | null = null
+interface ToastPayload {
+  text: string
+  action?: { label: string; onClick: () => void }
+}
 
-export function toast(text: string): void {
-  toastSetter?.(text)
+let toastSetter: ((payload: ToastPayload | null) => void) | null = null
+
+export function toast(text: string, action?: ToastPayload['action']): void {
+  toastSetter?.({ text, action })
 }
 
 export function ToastHost() {
-  const [text, setText] = useState('')
+  const [payload, setPayload] = useState<ToastPayload | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    toastSetter = (value: string) => {
-      setText(value)
+    toastSetter = (next) => {
+      setPayload(next)
       if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => setText(''), 2600)
+      if (next) {
+        // С кнопкой держим дольше — на неё надо успеть нажать.
+        timer.current = setTimeout(() => setPayload(null), next.action ? 8000 : 2600)
+      }
     }
     return () => {
       toastSetter = null
     }
   }, [])
 
-  if (!text) return null
-  return <div className="toast">{text}</div>
+  if (!payload) return null
+  return (
+    <div className="toast">
+      <span>{payload.text}</span>
+      {payload.action && (
+        <button
+          className="toast-action"
+          onClick={() => {
+            payload.action?.onClick()
+            setPayload(null)
+          }}
+        >
+          {payload.action.label}
+        </button>
+      )}
+    </div>
+  )
 }

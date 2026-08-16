@@ -17,7 +17,7 @@ export function EntryEditor({
   defaults?: Partial<Entry>
   onClose: () => void
 }) {
-  const { db, saveEntry, remove } = useStore()
+  const { db, saveEntry, remove, restore } = useStore()
   const initial = entry ?? defaults ?? {}
   const [date, setDate] = useState(initial.date ?? '')
   const [meal, setMeal] = useState<MealSlot>(initial.meal ?? 'dinner')
@@ -215,6 +215,10 @@ export function EntryEditor({
             remove('entries', entry.id)
             setConfirmDelete(false)
             onClose()
+            toast('Запись удалена', {
+              label: 'Отменить',
+              onClick: () => restore('entries', entry.id),
+            })
           }}
         />
       )}

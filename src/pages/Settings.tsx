@@ -426,10 +426,15 @@ export function SettingsPage() {
         <section className="section">
           <div className="section-head">
             <h2>Данные</h2>
+            <span className="small muted">обычно не нужно</span>
           </div>
           <div className="card stack">
+            <div className="small muted">
+              От случайного удаления защищают «Корзина» и «История версий» — файл скачивать
+              для этого не требуется.
+            </div>
             <button className="btn btn-block" onClick={exportJson}>
-              Скачать резервную копию
+              Скачать копию файлом
             </button>
             <label className="btn btn-block">
               Загрузить из файла

@@ -14,9 +14,12 @@ import {
 } from '../types'
 import { loadLocal, mergeDatabases, normalizeDatabase, pruneTombstones, saveLocal, serialize } from './db'
 import * as drive from './drive'
+import { ensureDailySnapshot } from './snapshots'
 import { nowIso, uid } from './util'
 
 export type SyncStatus = 'unconfigured' | 'offline' | 'idle' | 'syncing' | 'error'
+
+export type Collection = 'recipes' | 'entries' | 'products' | 'comments'
 
 interface SyncState {
   status: SyncStatus
@@ -42,7 +45,11 @@ interface StoreValue {
   saveEntry: (entry: Partial<Entry> & { id?: string }) => Entry
   saveProduct: (product: Partial<Product> & { id?: string }) => Product
   addComment: (recipeId: string, text: string) => void
-  remove: (collection: 'recipes' | 'entries' | 'products' | 'comments', id: string) => void
+  remove: (collection: Collection, id: string) => void
+  /** Вернуть удалённое: снимаем пометку об удалении. */
+  restore: (collection: Collection, id: string) => void
+  /** Окончательно стереть удалённое — записи исчезнут и у второго человека. */
+  purge: (collection?: Collection) => void
   updateSettings: (patch: Partial<Settings>) => void
   replaceDatabase: (db: Database) => void
 }
@@ -130,6 +137,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (changedDuringUpload) schedulePushRef.current()
         const at = nowIso()
         localStorage.setItem('wtc.lastSyncAt', at)
+        // Ежедневная копия базы — в фоне, синхронизацию не задерживает.
+        void ensureDailySnapshot(merged).catch(() => {})
         let email = sync.email
         if (!email) {
           email = await drive.fetchUserInfo().then((info) => info.email).catch(() => null)
@@ -256,10 +265,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         mutate((draft) => {
           const item = (draft[collection] as Record<string, Syncable>)[id]
           if (!item) return
-          ;(draft[collection] as Record<string, Syncable>)[id] = {
-            ...item,
-            deletedAt: nowIso(),
-            updatedAt: nowIso(),
+          const at = nowIso()
+          ;(draft[collection] as Record<string, Syncable>)[id] = { ...item, deletedAt: at, updatedAt: at }
+        })
+      },
+      restore: (collection, id) => {
+        mutate((draft) => {
+          const item = (draft[collection] as Record<string, Syncable>)[id]
+          if (!item) return
+          const restored = { ...item, updatedAt: nowIso() }
+          delete restored.deletedAt
+          ;(draft[collection] as Record<string, Syncable>)[id] = restored
+        })
+      },
+      purge: (collection) => {
+        mutate((draft) => {
+          const names: Collection[] = collection
+            ? [collection]
+            : ['recipes', 'entries', 'products', 'comments']
+          for (const name of names) {
+            const target = draft[name] as Record<string, Syncable>
+            for (const [id, item] of Object.entries(target)) {
+              if (item.deletedAt) delete target[id]
+            }
           }
         })
       },

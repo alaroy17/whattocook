@@ -131,7 +131,7 @@ export function Products() {
 }
 
 function ProductEditor({ product, onClose }: { product?: Product; onClose: () => void }) {
-  const { db, saveProduct, remove } = useStore()
+  const { db, saveProduct, remove, restore } = useStore()
   const [name, setName] = useState(product?.name ?? '')
   const [group, setGroup] = useState<string>(product?.group ?? 'Прочее')
   const [unit, setUnit] = useState(product?.unit ?? 'г')
@@ -257,6 +257,10 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
           onConfirm={() => {
             remove('products', existingId)
             onClose()
+            toast(`«${name.trim()}» удалён`, {
+              label: 'Отменить',
+              onClick: () => restore('products', existingId),
+            })
           }}
         />
       )}

@@ -14,6 +14,8 @@ import { More } from './pages/More'
 import { Stats } from './pages/Stats'
 import { Products } from './pages/Products'
 import { Fridge } from './pages/Fridge'
+import { Trash } from './pages/Trash'
+import { History } from './pages/History'
 import { SettingsPage } from './pages/Settings'
 import { classNames } from './lib/util'
 import { fridgeNeedsReview } from './lib/fridge'
@@ -65,6 +67,8 @@ export function App() {
         <Route path="/more" element={<More />} />
         <Route path="/more/stats" element={<Stats />} />
         <Route path="/more/products" element={<Products />} />
+        <Route path="/more/trash" element={<Trash />} />
+        <Route path="/more/history" element={<History />} />
         <Route path="/more/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

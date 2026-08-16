@@ -11,13 +11,62 @@ import { buildProductIndex, ingredientCost, recipeCost } from '../lib/cost'
 import { buildHistory, daysSince } from '../lib/suggest'
 import { formatDate, today } from '../lib/date'
 import { daysWord, formatMoney, formatQty, normalizeName, timesWord } from '../lib/util'
-import { IconCheck, IconEdit, IconHeart, IconTrash, IconUsers } from '../components/Icons'
-import { MEAL_SLOTS, USERS, userName } from '../types'
+import { IconCheck, IconEdit, IconHeart, IconPhoto, IconTrash, IconUsers } from '../components/Icons'
+import { MEAL_SLOTS, USERS, userName, type Recipe } from '../types'
+import { uploadRecipePhoto } from '../lib/photos'
+import * as drive from '../lib/drive'
+
+/** Фото блюда прямо на карточке: снять камерой или выбрать из галереи в одно нажатие. */
+function RecipePhoto({ recipe }: { recipe: Recipe }) {
+  const { saveRecipe } = useStore()
+  const [uploading, setUploading] = useState(false)
+
+  const pick = async (file: File | undefined) => {
+    if (!file) return
+    if (!drive.hasToken()) {
+      toast('Сначала подключите Google Drive — фотографии хранятся там')
+      return
+    }
+    setUploading(true)
+    try {
+      saveRecipe({ id: recipe.id, photoId: await uploadRecipePhoto(file) })
+      toast('Фото добавлено')
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Не удалось загрузить фото')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <label style={{ display: 'block', position: 'relative', cursor: 'pointer' }}>
+      <input
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(event) => void pick(event.target.files?.[0])}
+      />
+      {recipe.photoId ? (
+        <>
+          <Thumb photoId={recipe.photoId} large />
+          <span className="photo-edit">
+            <IconPhoto size={16} /> {uploading ? 'Загрузка…' : 'Заменить'}
+          </span>
+        </>
+      ) : (
+        <span className="photo-empty">
+          <IconPhoto size={22} />
+          {uploading ? 'Загрузка…' : 'Добавить фото блюда'}
+        </span>
+      )}
+    </label>
+  )
+}
 
 export function RecipeDetail() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
-  const { db, me, saveRecipe, saveEntry, addComment, remove } = useStore()
+  const { db, me, saveRecipe, saveEntry, addComment, remove, restore } = useStore()
   const [editing, setEditing] = useState(false)
   const [planning, setPlanning] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -83,7 +132,7 @@ export function RecipeDetail() {
       />
 
       <main className="content">
-        {recipe.photoId && <Thumb photoId={recipe.photoId} large />}
+        <RecipePhoto recipe={recipe} />
 
         <div className="row" style={{ marginTop: 12, gap: 8, flexWrap: 'wrap' }}>
           <span className="badge">
@@ -221,7 +270,13 @@ export function RecipeDetail() {
                 </div>
                 <button
                   className="icon-btn"
-                  onClick={() => remove('comments', comment.id)}
+                  onClick={() => {
+                    remove('comments', comment.id)
+                    toast('Заметка удалена', {
+                      label: 'Отменить',
+                      onClick: () => restore('comments', comment.id),
+                    })
+                  }}
                   aria-label="Удалить заметку"
                 >
                   <IconTrash size={16} />
@@ -299,6 +354,10 @@ export function RecipeDetail() {
           onConfirm={() => {
             remove('recipes', recipe.id)
             navigate('/recipes')
+            toast(`«${recipe.name}» удалено`, {
+              label: 'Отменить',
+              onClick: () => restore('recipes', recipe.id),
+            })
           }}
         />
       )}
