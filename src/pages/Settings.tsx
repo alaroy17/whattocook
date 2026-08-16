@@ -10,8 +10,6 @@ import { buildSeedDatabase } from '../lib/seed'
 import { daysWord } from '../lib/util'
 import { IconCheck, IconChevronRight, IconCloud, IconPlus, IconRefresh } from '../components/Icons'
 
-const HELP_URL = 'https://console.cloud.google.com/apis/credentials'
-
 /**
  * Включение и порядок разделов. Скрытый раздел исчезает из фильтров и из формы блюда,
  * но уже сохранённые блюда с ним остаются на месте.
@@ -108,19 +106,15 @@ function CategoryManager() {
 
 export function SettingsPage() {
   const { db, sync, connect, disconnect, syncNow, updateSettings, replaceDatabase } = useStore()
-  const [clientId, setClientIdValue] = useState(drive.getClientId())
   const [shareEmail, setShareEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
-  const [showHelp, setShowHelp] = useState(!drive.getClientId())
 
   const connected = sync.status === 'idle' || sync.status === 'syncing'
-  const builtIn = drive.hasBuiltInClientId()
   const shared = db.settings.sharedWith ?? []
 
   const doConnect = async () => {
-    drive.setClientId(clientId)
     setBusy(true)
     try {
       await connect()
@@ -160,11 +154,6 @@ export function SettingsPage() {
         <section className="section">
           <div className="section-head">
             <h2>Google Drive</h2>
-            {!builtIn && (
-              <button className="link" onClick={() => setShowHelp((value) => !value)}>
-                {showHelp ? 'Свернуть' : 'Как настроить'}
-              </button>
-            )}
           </div>
 
           <div className="card">
@@ -187,44 +176,10 @@ export function SettingsPage() {
               </div>
             )}
 
-            {/* Client ID вшит в сборку — настраивать на этом устройстве нечего. */}
-            {!connected && builtIn && (
-              <div className="small muted" style={{ marginTop: 10 }}>
-                Приложение уже настроено — достаточно войти в тот Google-аккаунт, для которого
-                открыт доступ к общей папке.
+            {!connected && (
+              <div className="small muted" style={{ marginTop: 6 }}>
+                Войдите в тот Google-аккаунт, которому открыт доступ к общей папке
               </div>
-            )}
-
-            {/* Инструкция нужна ровно один раз — пока Client ID неоткуда взять. */}
-            {!connected && !builtIn && (
-              <>
-                {showHelp && (
-                  <div className="small muted" style={{ marginTop: 10, lineHeight: 1.6 }}>
-                    1. Откройте <a href={HELP_URL} target="_blank" rel="noreferrer">Google Cloud Console</a> и создайте
-                    проект, включите Google Drive API.
-                    <br />
-                    2. <b>Audience</b>: тип External, обе ваши почты в Test users.
-                    <br />
-                    3. <b>Data access</b>: добавьте области <code>.../auth/drive</code> и{' '}
-                    <code>.../auth/userinfo.email</code>.
-                    <br />
-                    4. <b>Clients</b> → Web application, в Authorized JavaScript origins — адрес этого сайта.
-                    <br />
-                    5. Скопируйте Client ID сюда.
-                  </div>
-                )}
-
-                <div style={{ marginTop: 12 }}>
-                  <Field label="Client ID" hint="Заканчивается на .apps.googleusercontent.com">
-                    <input
-                      className="input"
-                      value={clientId}
-                      onChange={(event) => setClientIdValue(event.target.value)}
-                      placeholder="1234567890-abc.apps.googleusercontent.com"
-                    />
-                  </Field>
-                </div>
-              </>
             )}
 
             <div className="row" style={{ marginTop: 10 }}>
@@ -235,10 +190,10 @@ export function SettingsPage() {
               ) : (
                 <button
                   className="btn btn-primary grow"
-                  disabled={busy || !clientId.trim()}
+                  disabled={busy}
                   onClick={() => void doConnect()}
                 >
-                  {builtIn ? 'Войти в Google' : 'Подключить'}
+                  Войти в Google
                 </button>
               )}
             </div>
@@ -322,29 +277,7 @@ export function SettingsPage() {
               </div>
 
               <div className="divider" />
-              <button className="btn btn-block" onClick={() => setShowHelp((value) => !value)}>
-                {showHelp ? 'Скрыть Client ID' : 'Изменить Client ID'}
-              </button>
-              {showHelp && (
-                <div style={{ marginTop: 10 }}>
-                  <Field label="Client ID">
-                    <input
-                      className="input"
-                      value={clientId}
-                      onChange={(event) => setClientIdValue(event.target.value)}
-                    />
-                  </Field>
-                  <button
-                    className="btn btn-block"
-                    style={{ marginTop: 8 }}
-                    disabled={busy || !clientId.trim()}
-                    onClick={() => void doConnect()}
-                  >
-                    Переподключить
-                  </button>
-                </div>
-              )}
-              <button className="btn btn-block" style={{ marginTop: 8 }} onClick={disconnect}>
+              <button className="btn btn-block" onClick={disconnect}>
                 Отключить аккаунт
               </button>
             </div>
