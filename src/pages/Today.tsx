@@ -15,6 +15,7 @@ import {
 import { RecipeRow, Thumb } from '../components/RecipeRow'
 import { Avatar, Chips, Empty, Segmented, toast } from '../components/ui'
 import { EntryEditor } from '../components/EntryEditor'
+import { ConnectNotice } from '../components/ConnectNotice'
 import { RecipeEditor } from '../components/RecipeEditor'
 import { IconCheck, IconDice, IconFridge, IconPlus, IconRefresh, IconRepeat } from '../components/Icons'
 import { MEAL_SLOTS } from '../types'
@@ -88,6 +89,8 @@ export function Today() {
     <>
       <TopBar title={formatRelativeDay(date)} />
       <main className="content">
+        <ConnectNotice />
+
         {needsFridge && (
           <div className="notice">
             <IconFridge size={20} />

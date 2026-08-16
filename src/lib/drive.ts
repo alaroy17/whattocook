@@ -54,8 +54,23 @@ export class DriveError extends Error {
   }
 }
 
+/** Client ID, вшитый в сборку. Не секрет: он ограничен списком разрешённых адресов. */
+const BUILT_IN_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '').trim()
+
+/**
+ * Client ID берём из сборки, а введённый вручную его перекрывает.
+ *
+ * Раньше он лежал только в localStorage — то есть в конкретном браузере, и на телефоне
+ * приложение вело себя так, будто Google вообще не настроен: вводить приходилось заново
+ * на каждом устройстве.
+ */
 export function getClientId(): string {
-  return localStorage.getItem(CLIENT_ID_KEY) ?? ''
+  return localStorage.getItem(CLIENT_ID_KEY) || BUILT_IN_CLIENT_ID
+}
+
+/** Client ID пришёл из сборки, а не введён руками на этом устройстве. */
+export function hasBuiltInClientId(): boolean {
+  return Boolean(BUILT_IN_CLIENT_ID) && !localStorage.getItem(CLIENT_ID_KEY)
 }
 
 export function setClientId(value: string): void {

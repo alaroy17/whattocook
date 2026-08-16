@@ -33,10 +33,15 @@ jobs:
       - run: npm ci
 
       # base должен совпадать с именем репозитория: https://<user>.github.io/<repo>/
+      # GOOGLE_CLIENT_ID — переменная репозитория (Settings → Secrets and variables →
+      # Actions → Variables). Не секрет: Client ID и так виден в запросах браузера,
+      # а доступ ограничен списком разрешённых адресов в Google Cloud. Если переменной
+      # нет, Client ID можно ввести вручную в настройках приложения.
       - name: Build
         run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
 
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
 

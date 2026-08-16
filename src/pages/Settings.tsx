@@ -116,6 +116,7 @@ export function SettingsPage() {
   const [showHelp, setShowHelp] = useState(!drive.getClientId())
 
   const connected = sync.status === 'idle' || sync.status === 'syncing'
+  const builtIn = drive.hasBuiltInClientId()
   const shared = db.settings.sharedWith ?? []
 
   const doConnect = async () => {
@@ -159,9 +160,11 @@ export function SettingsPage() {
         <section className="section">
           <div className="section-head">
             <h2>Google Drive</h2>
-            <button className="link" onClick={() => setShowHelp((value) => !value)}>
-              {showHelp ? 'Свернуть' : 'Как настроить'}
-            </button>
+            {!builtIn && (
+              <button className="link" onClick={() => setShowHelp((value) => !value)}>
+                {showHelp ? 'Свернуть' : 'Как настроить'}
+              </button>
+            )}
           </div>
 
           <div className="card">
@@ -184,8 +187,16 @@ export function SettingsPage() {
               </div>
             )}
 
-            {/* Инструкция нужна ровно один раз — пока Client ID не введён. */}
-            {!connected && (
+            {/* Client ID вшит в сборку — настраивать на этом устройстве нечего. */}
+            {!connected && builtIn && (
+              <div className="small muted" style={{ marginTop: 10 }}>
+                Приложение уже настроено — достаточно войти в тот Google-аккаунт, для которого
+                открыт доступ к общей папке.
+              </div>
+            )}
+
+            {/* Инструкция нужна ровно один раз — пока Client ID неоткуда взять. */}
+            {!connected && !builtIn && (
               <>
                 {showHelp && (
                   <div className="small muted" style={{ marginTop: 10, lineHeight: 1.6 }}>
@@ -227,7 +238,7 @@ export function SettingsPage() {
                   disabled={busy || !clientId.trim()}
                   onClick={() => void doConnect()}
                 >
-                  Подключить
+                  {builtIn ? 'Войти в Google' : 'Подключить'}
                 </button>
               )}
             </div>
