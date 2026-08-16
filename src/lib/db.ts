@@ -32,6 +32,24 @@ export function normalizeDatabase(input: unknown): Database {
   }
   db.settings = { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) }
   db.settingsUpdatedAt = raw.settingsUpdatedAt ?? new Date(0).toISOString()
+
+  /*
+   * База, созданная до появления настройки разделов, о ней не знает. Если просто
+   * подставить список по умолчанию, редкие разделы (выпечка, закуски) окажутся
+   * выключены — и уже внесённые блюда пропадут из фильтров. Поэтому к умолчанию
+   * добавляем все разделы, которые реально встречаются в рецептах.
+   */
+  if (!Array.isArray(raw.settings?.categories)) {
+    const used = new Set<string>()
+    for (const recipe of Object.values(db.recipes)) {
+      if (!recipe.deletedAt && recipe.category) used.add(recipe.category)
+    }
+    db.settings.categories = [
+      ...db.settings.categories,
+      ...[...used].filter((category) => !db.settings.categories.includes(category)),
+    ]
+  }
+
   return db
 }
 

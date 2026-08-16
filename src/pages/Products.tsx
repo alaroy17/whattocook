@@ -5,7 +5,7 @@ import { alive } from '../lib/db'
 import { PRODUCT_GROUPS, UNITS, type Product } from '../types'
 import { Confirm, Empty, Field, SearchInput, Sheet, toast } from '../components/ui'
 import { IconPlus, IconTrash } from '../components/Icons'
-import { formatMoney, normalizeName, nowIso } from '../lib/util'
+import { countOf, formatMoney, normalizeName, nowIso } from '../lib/util'
 
 export function Products() {
   const { db } = useStore()
@@ -46,7 +46,7 @@ export function Products() {
         title="Продукты и цены"
         back
         showUser={false}
-        subtitle={`${products.length} продуктов${withoutPrice > 0 ? ` · без цены: ${withoutPrice}` : ''}`}
+        subtitle={`${countOf(products.length, 'product')}${withoutPrice > 0 ? ` · без цены: ${withoutPrice}` : ''}`}
       />
       <main className="content">
         <SearchInput value={search} onChange={setSearch} placeholder="Название продукта" />

@@ -75,12 +75,51 @@ export function pluralRu(n: number, forms: [string, string, string]): string {
   return forms[2]
 }
 
+/**
+ * Счётные слова собраны здесь, а не разбросаны по экранам: половина мест
+ * писала «5 продуктов» и «1 блюд» руками, и склонения разъезжались.
+ */
+type Forms = [string, string, string]
+
+const WORDS = {
+  day: ['день', 'дня', 'дней'],
+  time: ['раз', 'раза', 'раз'],
+  dish: ['блюдо', 'блюда', 'блюд'],
+  entry: ['запись', 'записи', 'записей'],
+  product: ['продукт', 'продукта', 'продуктов'],
+  ingredient: ['ингредиент', 'ингредиента', 'ингредиентов'],
+  cooking: ['приготовление', 'приготовления', 'приготовлений'],
+  copy: ['копия', 'копии', 'копий'],
+  serving: ['порция', 'порции', 'порций'],
+} satisfies Record<string, Forms>
+
+export function countOf(n: number, word: keyof typeof WORDS): string {
+  return `${n} ${pluralRu(n, WORDS[word] as Forms)}`
+}
+
 export function daysWord(n: number): string {
-  return `${n} ${pluralRu(n, ['день', 'дня', 'дней'])}`
+  return countOf(n, 'day')
 }
 
 export function timesWord(n: number): string {
-  return `${n} ${pluralRu(n, ['раз', 'раза', 'раз'])}`
+  return countOf(n, 'time')
+}
+
+/** «каждый день» вместо «раз в 1 день», «через день» вместо «раз в 2 дня». */
+export function intervalWord(days: number): string {
+  if (days <= 1) return 'каждый день'
+  if (days === 2) return 'через день'
+  if (days === 7) return 'раз в неделю'
+  if (days === 14) return 'раз в две недели'
+  return `раз в ${daysWord(days)}`
+}
+
+/** «сегодня», «вчера», «5 дней назад» — без повторения слова «назад» там, где оно лишнее. */
+export function agoWord(days: number | null): string {
+  if (days == null) return 'ещё не готовили'
+  if (days === 0) return 'сегодня'
+  if (days === 1) return 'вчера'
+  return `${daysWord(days)} назад`
 }
 
 export function debounce<A extends unknown[]>(fn: (...args: A) => void, ms: number) {

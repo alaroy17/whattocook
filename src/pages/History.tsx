@@ -7,6 +7,7 @@ import { Confirm, Empty, toast } from '../components/ui'
 import { IconRefresh } from '../components/Icons'
 import { formatDate } from '../lib/date'
 import { alive } from '../lib/db'
+import { countOf } from '../lib/util'
 
 export function History() {
   const { db, sync, replaceDatabase } = useStore()
@@ -39,7 +40,7 @@ export function History() {
         title="История версий"
         back
         showUser={false}
-        subtitle={snapshots ? `${snapshots.length} копий на Диске` : undefined}
+        subtitle={snapshots ? `${countOf(snapshots.length, 'copy')} на Диске` : undefined}
         actions={
           connected ? (
             <button className="icon-btn" onClick={load} aria-label="Обновить список">
@@ -72,7 +73,7 @@ export function History() {
               <div className="row-between">
                 <span>Сейчас</span>
                 <span className="small muted">
-                  {currentRecipes} блюд · {currentEntries} записей
+                  {countOf(currentRecipes, 'dish')} · {countOf(currentEntries, 'entry')}
                 </span>
               </div>
             </div>
@@ -91,7 +92,7 @@ export function History() {
                     <span className="grow shop-name">
                       {formatDate(snapshot.date, { year: true })}
                       <div className="small muted">
-                        {snapshot.recipes} блюд · {snapshot.entries} записей
+                        {countOf(snapshot.recipes, 'dish')} · {countOf(snapshot.entries, 'entry')}
                       </div>
                     </span>
                     <button className="btn btn-sm" onClick={() => setRestoring(snapshot)}>
@@ -108,7 +109,7 @@ export function History() {
       {restoring && (
         <Confirm
           title={`Восстановить копию от ${formatDate(restoring.date)}?`}
-          text={`В копии ${restoring.recipes} блюд и ${restoring.entries} записей. Вернётся то, что после этой даты удалили или потеряли. Записи, изменённые позже, останутся в свежем виде — правки не откатятся.`}
+          text={`В копии ${countOf(restoring.recipes, 'dish')} и ${countOf(restoring.entries, 'entry')}. Вернётся то, что после этой даты удалили или потеряли. Записи, изменённые позже, останутся в свежем виде — правки не откатятся.`}
           confirmLabel={busy ? 'Восстанавливаем…' : 'Восстановить'}
           onCancel={() => setRestoring(null)}
           onConfirm={() => {

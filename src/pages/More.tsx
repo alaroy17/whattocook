@@ -15,7 +15,7 @@ import {
 } from '../components/Icons'
 import { USERS } from '../types'
 import { Avatar } from '../components/ui'
-import { classNames, pluralRu } from '../lib/util'
+import { classNames, countOf } from '../lib/util'
 
 function MenuRow({
   icon,
@@ -99,19 +99,19 @@ export function More() {
           <MenuRow
             icon={<IconBook size={19} />}
             title="Рецепты"
-            hint={`${recipes} ${pluralRu(recipes, ['блюдо', 'блюда', 'блюд'])}`}
+            hint={countOf(recipes, 'dish')}
             onClick={() => navigate('/recipes')}
           />
           <MenuRow
             icon={<IconTag size={19} />}
             title="Продукты и цены"
-            hint={`${products} в каталоге`}
+            hint={`${countOf(products, 'product')} в каталоге`}
             onClick={() => navigate('/more/products')}
           />
           <MenuRow
             icon={<IconChart size={19} />}
             title="Статистика"
-            hint={`${entries} приготовлений`}
+            hint={countOf(entries, 'cooking')}
             onClick={() => navigate('/more/stats')}
           />
         </div>
@@ -136,7 +136,7 @@ export function More() {
             hint={
               trashed === 0
                 ? 'пусто'
-                : `${trashed} ${pluralRu(trashed, ['запись', 'записи', 'записей'])} можно вернуть`
+                : `${countOf(trashed, 'entry')} можно вернуть`
             }
             onClick={() => navigate('/more/trash')}
           />

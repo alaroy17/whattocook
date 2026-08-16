@@ -3,7 +3,7 @@ import type { Recipe } from '../types'
 import { usePhoto } from '../lib/photos'
 import { IconClock, IconHeart, IconPot } from './Icons'
 import { Avatar } from './ui'
-import { daysWord } from '../lib/util'
+import { agoWord } from '../lib/util'
 
 export function Thumb({ photoId, large }: { photoId?: string; large?: boolean }) {
   const url = usePhoto(photoId)
@@ -45,8 +45,7 @@ export function RecipeRow({
               {recipe.timeMin} мин
             </span>
           )}
-          {days != null && <span>{days === 0 ? 'сегодня' : `${daysWord(days)} назад`}</span>}
-          {days === null && <span>ни разу</span>}
+          {days !== undefined && <span>{days === null ? 'ни разу' : agoWord(days)}</span>}
         </div>
         {reasons && reasons.length > 0 && (
           <div className="reasons">

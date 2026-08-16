@@ -76,4 +76,62 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   check('порядок аргументов не важен', mergeDatabases(b, a).recipes.r3.name === 'новое')
 }
 
+// 6. База из старой версии открывается без потерь — данные пользователя важнее всего.
+{
+  const old = {
+    schemaVersion: 1,
+    recipes: {
+      r1: {
+        id: 'r1',
+        name: 'Салат с рукколой',
+        category: 'Закуска',
+        tags: ['быстро'],
+        ingredients: [{ name: 'Руккола', qty: 100, unit: 'г' }],
+        steps: 'Смешать',
+        timeMin: 10,
+        servings: 2,
+        difficulty: 1,
+        chef: 'any',
+        favorite: true,
+        ratings: { sasha: 5 },
+        createdAt: '2026-08-10T10:00:00.000Z',
+        updatedAt: '2026-08-10T10:00:00.000Z',
+      },
+    },
+    entries: {
+      e1: {
+        id: 'e1',
+        date: '2026-08-12',
+        meal: 'dinner',
+        status: 'done',
+        recipeId: 'r1',
+        createdAt: '2026-08-12T10:00:00.000Z',
+        updatedAt: '2026-08-12T10:00:00.000Z',
+      },
+    },
+    products: {},
+    comments: {},
+    // Настроек новых версий здесь нет — именно так выглядит база до обновления.
+    settings: { cooldownDays: 10, preferInStock: true, theme: 'system', currency: '₽' },
+    settingsUpdatedAt: '2026-08-10T10:00:00.000Z',
+  }
+
+  const db = normalizeDatabase(old)
+  check('рецепт пережил обновление', db.recipes.r1?.name === 'Салат с рукколой')
+  check('оценки и избранное на месте', db.recipes.r1?.ratings?.sasha === 5 && db.recipes.r1?.favorite === true)
+  check('ингредиенты на месте', db.recipes.r1?.ingredients?.[0]?.qty === 100)
+  check('история на месте', db.entries.e1?.recipeId === 'r1')
+  check('старые настройки сохранены', db.settings.cooldownDays === 10 && db.settings.currency === '₽')
+  check('новые настройки получили значения', db.settings.purgedAt === null && Array.isArray(db.settings.sharedWith))
+  check('раздел «Закуска» не пропал из фильтров', db.settings.categories.includes('Закуска'))
+
+  // И самое опасное: чистка надгробий не должна ничего удалить у старой базы.
+  const pruned = pruneTombstones(db)
+  check('очистка ничего не выкинула', Object.keys(pruned.recipes).length === 1 && Object.keys(pruned.entries).length === 1)
+
+  // Слияние старой базы с пустой локальной тоже ничего не теряет.
+  const merged = mergeDatabases(normalizeDatabase({}), db)
+  check('слияние с пустой базой сохраняет рецепт', merged.recipes.r1?.name === 'Салат с рукколой')
+}
+
 process.exit(failed === 0 ? 0 : 1)

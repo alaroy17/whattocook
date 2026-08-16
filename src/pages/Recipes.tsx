@@ -10,7 +10,7 @@ import { RecipeImport } from '../components/RecipeImport'
 import { IconFilter, IconImport, IconPlus } from '../components/Icons'
 import { buildProductIndex, recipeCost } from '../lib/cost'
 import { alive } from '../lib/db'
-import { classNames, formatMoney } from '../lib/util'
+import { classNames, countOf, formatMoney } from '../lib/util'
 import { categoriesWithRecipes } from '../lib/categories'
 
 type Sort = 'forgotten' | 'name' | 'rating' | 'cost'
@@ -89,7 +89,7 @@ export function Recipes() {
     <>
       <TopBar
         title="Рецепты"
-        subtitle={`${total} блюд в базе`}
+        subtitle={countOf(total, 'dish')}
         actions={
           <button className="icon-btn" onClick={() => setImporting(true)} aria-label="Импорт рецепта">
             <IconImport />

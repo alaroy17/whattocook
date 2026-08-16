@@ -13,7 +13,7 @@ import {
   type Recipe,
   type Syncable,
 } from '../types'
-import { daysWord, pluralRu } from '../lib/util'
+import { countOf, daysWord } from '../lib/util'
 import { discardPhoto } from '../lib/photos'
 
 interface TrashItem {
@@ -83,7 +83,7 @@ export function Trash() {
         subtitle={
           items.length === 0
             ? 'пусто'
-            : `${items.length} ${pluralRu(items.length, ['запись', 'записи', 'записей'])}`
+            : countOf(items.length, 'entry')
         }
       />
       <main className="content">

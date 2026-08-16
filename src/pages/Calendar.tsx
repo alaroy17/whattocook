@@ -16,7 +16,7 @@ import {
   today,
   WEEKDAYS_SHORT,
 } from '../lib/date'
-import { classNames, formatMoney } from '../lib/util'
+import { classNames, countOf, formatMoney } from '../lib/util'
 import { IconChevronLeft, IconChevronRight, IconPlus } from '../components/Icons'
 import { EntryEditor } from '../components/EntryEditor'
 import { Avatar, Empty, Segmented } from '../components/ui'
@@ -85,7 +85,7 @@ export function CalendarPage() {
     <>
       <TopBar
         title={formatMonth(month)}
-        subtitle={`${cooked.length} приготовлений${monthCost > 0 ? ` · ${formatMoney(monthCost, db.settings.currency)}` : ''}`}
+        subtitle={`${countOf(cooked.length, 'cooking')}${monthCost > 0 ? ` · ${formatMoney(monthCost, db.settings.currency)}` : ''}`}
         actions={
           <>
             <button className="icon-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Предыдущий месяц">

@@ -16,9 +16,21 @@
   --good: #6c8a5a;
   --good-soft: #eaf1e2;
   --warn: #b3822f;
+  /* Тень — только у всплывающих штук. Карточки держатся на границах и воздухе. */
   --shadow: 0 1px 2px rgba(60, 42, 28, 0.05), 0 8px 24px -12px rgba(60, 42, 28, 0.18);
-  --radius: 14px;
-  --radius-sm: 10px;
+  --shadow-lift: 0 10px 30px -12px rgba(60, 42, 28, 0.3);
+  --radius: 16px;
+  --radius-sm: 11px;
+  --radius-lg: 22px;
+
+  /* Единая шкала кегля — раньше по экранам гуляли 9, 10.5, 11.5, 12.5, 13.5, 14, 15 */
+  --text-xs: 11.5px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 17px;
+
+  --gap: 12px;
+  --gap-section: 26px;
   color-scheme: light;
 }
 
@@ -70,12 +82,12 @@ h3,
 h4 {
   margin: 0;
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
-h1 { font-size: 22px; }
-h2 { font-size: 17px; }
-h3 { font-size: 15px; }
+h1 { font-size: 26px; line-height: 1.15; }
+h2 { font-size: var(--text-lg); }
+h3 { font-size: var(--text-md); }
 
 a {
   color: var(--accent-text);
@@ -121,10 +133,11 @@ button {
 }
 
 .topbar-sub {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--muted);
   font-weight: 400;
   letter-spacing: 0;
+  margin-top: 2px;
 }
 
 .content {
@@ -204,8 +217,7 @@ button {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
-  box-shadow: var(--shadow);
+  padding: 15px;
 }
 
 /* Отступ только между карточками, идущими в обычном потоке.
@@ -222,7 +234,7 @@ button {
 }
 
 .section {
-  margin-top: 22px;
+  margin-top: var(--gap-section);
 }
 
 .section:first-child {
@@ -233,7 +245,7 @@ button {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 11px;
 }
 
 .section-head h2 {
@@ -254,7 +266,7 @@ button {
 }
 
 .small {
-  font-size: 12.5px;
+  font-size: var(--text-sm);
 }
 
 .row {
@@ -284,14 +296,16 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 10px 16px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 11px 18px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 14.5px;
+  font-weight: 550;
+  letter-spacing: -0.005em;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, opacity 0.12s;
 }
@@ -325,7 +339,7 @@ button {
 
 .btn-danger { color: #b0432f; border-color: var(--border); }
 
-.btn-sm { padding: 6px 11px; font-size: 13px; }
+.btn-sm { min-height: 34px; padding: 7px 13px; font-size: var(--text-sm); }
 .btn-block { width: 100%; }
 
 .icon-btn {
@@ -382,11 +396,11 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  border-radius: 999px;
+  padding: 4px 9px;
+  border-radius: 8px;
   background: var(--bg-soft);
-  color: var(--muted);
-  font-size: 11.5px;
+  color: var(--text-2);
+  font-size: var(--text-xs);
   white-space: nowrap;
 }
 
@@ -916,11 +930,12 @@ textarea.input {
 .shop-item input { accent-color: var(--accent); width: 18px; height: 18px; flex: none; }
 
 .group-title {
-  font-size: 12px;
+  font-size: var(--text-xs);
+  font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 14px 2px 6px;
+  letter-spacing: 0.07em;
+  padding: 18px 2px 7px;
 }
 
 /* ─── Модальные окна ──────────────────────────────────────────────────────── */
@@ -1014,18 +1029,21 @@ textarea.input {
   right: 16px;
   bottom: calc(76px + env(safe-area-inset-bottom));
   z-index: 25;
-  width: 52px;
-  height: 52px;
-  border-radius: 999px;
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
   border: 0;
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 6px 20px -6px rgba(120, 60, 30, 0.55);
+  box-shadow: 0 8px 22px -8px rgba(120, 60, 30, 0.6);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.12s;
 }
+
+.fab:active { transform: scale(0.94); }
 
 .divider { height: 1px; background: var(--border); margin: 12px 0; }
 

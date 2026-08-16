@@ -19,7 +19,7 @@ import { ConnectNotice } from '../components/ConnectNotice'
 import { RecipeEditor } from '../components/RecipeEditor'
 import { IconCheck, IconDice, IconFridge, IconPlus, IconRefresh, IconRepeat } from '../components/Icons'
 import { MEAL_SLOTS } from '../types'
-import { daysWord } from '../lib/util'
+import { agoWord, daysWord, intervalWord } from '../lib/util'
 import { categoriesWithRecipes } from '../lib/categories'
 import { fridgeNeedsReview, fridgeStaleDays } from '../lib/fridge'
 
@@ -82,8 +82,9 @@ export function Today() {
     })
   }
 
-  // «Не готовили N дней» и так написано рядом с датой — в бейджах это лишний повтор.
-  const badgeReasons = (reasons: string[]) => reasons.filter((reason) => !reason.startsWith('не готовили'))
+  // Давность и так написана рядом с названием — в бейджах она была бы повтором.
+  const badgeReasons = (reasons: string[]) =>
+    reasons.filter((reason) => !/^(не готовили|ещё ни разу)/.test(reason))
 
   return (
     <>
@@ -161,15 +162,9 @@ export function Today() {
                   onClick={() => markCooked(item.recipe.id)}
                 >
                   <span className="name">{item.recipe.name}</span>
-                  <span className="small muted">
-                    {item.days == null
-                      ? 'ещё не готовили'
-                      : item.days === 0
-                        ? 'сегодня'
-                        : `${daysWord(item.days)} назад`}
-                  </span>
+                  <span className="small muted">{agoWord(item.days)}</span>
                   <span className={`badge${item.due ? ' badge-accent' : ''}`}>
-                    {item.due ? 'пора' : `раз в ${daysWord(item.interval)}`}
+                    {item.due ? 'пора' : intervalWord(item.interval)}
                   </span>
                 </button>
               ))}
@@ -212,9 +207,7 @@ export function Today() {
                   <div className="meta">
                     <span>{hero.recipe.category}</span>
                     {hero.recipe.timeMin != null && <span>{hero.recipe.timeMin} мин</span>}
-                    <span>
-                      {hero.days == null ? 'ни разу не готовили' : `последний раз ${daysWord(hero.days)} назад`}
-                    </span>
+                    <span>{hero.days == null ? 'ни разу не готовили' : agoWord(hero.days)}</span>
                   </div>
                   <div className="reasons">
                     {badgeReasons(hero.reasons).map((reason) => (
@@ -327,7 +320,7 @@ export function Today() {
 
         <section className="section">
           <button className="btn btn-block" onClick={() => setLogging({ status: 'done' })}>
-            <IconPlus size={16} /> Записать, что ели сегодня
+            <IconPlus size={16} /> Записать {MEAL_SLOTS.find((slot) => slot.id === guessMeal(undefined))?.name.toLowerCase()}
           </button>
           <div className="small muted" style={{ textAlign: 'center', marginTop: 8 }}>
             {formatDate(date, { weekday: true, year: true })}

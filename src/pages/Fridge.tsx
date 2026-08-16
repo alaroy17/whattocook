@@ -6,7 +6,7 @@ import { alive } from '../lib/db'
 import { PRODUCT_GROUPS, type Product } from '../types'
 import { Empty, Field, Sheet, toast } from '../components/ui'
 import { IconCheck, IconPlus, IconTag, IconTrash } from '../components/Icons'
-import { classNames, daysWord, normalizeName, nowIso } from '../lib/util'
+import { agoWord, classNames, countOf, normalizeName, nowIso } from '../lib/util'
 import { fridgeStaleDays } from '../lib/fridge'
 
 export function Fridge() {
@@ -70,7 +70,7 @@ export function Fridge() {
         subtitle={
           atHome.length === 0
             ? 'список пуст'
-            : `${atHome.length} продуктов${stale != null ? ` · обновляли ${stale === 0 ? 'сегодня' : `${daysWord(stale)} назад`}` : ''}`
+            : `${countOf(atHome.length, 'product')}${stale != null ? ` · обновляли ${agoWord(stale)}` : ''}`
         }
         actions={
           <button

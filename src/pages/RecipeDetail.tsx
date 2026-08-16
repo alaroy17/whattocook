@@ -10,7 +10,7 @@ import { EntryEditor } from '../components/EntryEditor'
 import { buildProductIndex, ingredientCost, recipeCost } from '../lib/cost'
 import { buildHistory, daysSince, guessMeal } from '../lib/suggest'
 import { formatDate, today } from '../lib/date'
-import { daysWord, formatAmount, formatMoney, normalizeName, safeUrl, timesWord } from '../lib/util'
+import { agoWord, countOf, formatAmount, formatMoney, normalizeName, safeUrl, timesWord } from '../lib/util'
 import { IconCheck, IconEdit, IconHeart, IconPhoto, IconTrash, IconUsers } from '../components/Icons'
 import { MEAL_SLOTS, USERS, userName, type Recipe } from '../types'
 import { uploadRecipePhoto } from '../lib/photos'
@@ -134,29 +134,35 @@ export function RecipeDetail() {
       <main className="content">
         <RecipePhoto recipe={recipe} />
 
-        <div className="row" style={{ marginTop: 12, gap: 8, flexWrap: 'wrap' }}>
-          <span className="badge">
-            {days == null ? 'ещё не готовили' : days === 0 ? 'готовили сегодня' : `${daysWord(days)} назад`}
-          </span>
-          {times > 0 && <span className="badge">приготовили {timesWord(times)}</span>}
+        {/* Факты — обычной строкой: россыпь плашек занимала три ряда и читалась хуже. */}
+        <div className="meta" style={{ marginTop: 14, fontSize: 'var(--text-sm)' }}>
+          <span>{agoWord(days)}</span>
+          {times > 0 && <span>приготовили {timesWord(times)}</span>}
           {recipe.chef !== 'any' && (
-            <span className="badge">
-              <IconUsers size={13} /> обычно готовит {userName(recipe.chef)}
+            <span className="row" style={{ gap: 4 }}>
+              <IconUsers size={13} /> {userName(recipe.chef)}
             </span>
           )}
-          {recipe.servings && <span className="badge">{recipe.servings} порц.</span>}
-          {cost.known > 0 && (
-            <span className="badge badge-accent">
-              {formatMoney(cost.total, db.settings.currency)}
-              {recipe.servings ? ` · ${formatMoney(cost.total / recipe.servings, db.settings.currency)}/порц.` : ''}
-            </span>
-          )}
-          {recipe.tags.map((tag) => (
-            <span key={tag} className="badge">
-              {tag}
-            </span>
-          ))}
+          {recipe.servings ? <span>{countOf(recipe.servings, 'serving')}</span> : null}
         </div>
+
+        {(cost.known > 0 || recipe.tags.length > 0) && (
+          <div className="row" style={{ marginTop: 10, gap: 7, flexWrap: 'wrap' }}>
+            {cost.known > 0 && (
+              <span className="badge badge-accent">
+                {formatMoney(cost.total, db.settings.currency)}
+                {recipe.servings
+                  ? ` · ${formatMoney(cost.total / recipe.servings, db.settings.currency)} порция`
+                  : ''}
+              </span>
+            )}
+            {recipe.tags.map((tag) => (
+              <span key={tag} className="badge">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="row" style={{ marginTop: 14 }}>
           <button

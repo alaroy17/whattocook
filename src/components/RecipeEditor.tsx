@@ -68,7 +68,8 @@ export function RecipeEditor({
     }
     setUploading(true)
     try {
-      setPhotoId(await uploadRecipePhoto(file, photoId))
+      // Старый файл не трогаем: правку ещё могут отменить, и фото исчезло бы зря.
+      setPhotoId(await uploadRecipePhoto(file))
     } catch (error) {
       toast(error instanceof Error ? error.message : 'Не удалось загрузить фото')
     } finally {
@@ -76,11 +77,24 @@ export function RecipeEditor({
     }
   }
 
+  /*
+   * Фотографии на Диске живут отдельно от базы, поэтому лишние надо убирать руками:
+   * при сохранении — заменённую старую, при отмене — только что загруженную,
+   * на которую уже никто не ссылается.
+   */
+  const initialPhotoId = recipe?.photoId
+
+  const cancel = () => {
+    if (photoId && photoId !== initialPhotoId) void discardPhoto(photoId)
+    onClose()
+  }
+
   const submit = () => {
     if (!name.trim()) {
       toast('Впишите название блюда')
       return
     }
+    if (initialPhotoId && initialPhotoId !== photoId) void discardPhoto(initialPhotoId)
     const saved = saveRecipe({
       id: recipe?.id,
       name: name.trim(),
@@ -108,7 +122,7 @@ export function RecipeEditor({
   }
 
   return (
-    <Sheet title={recipe ? 'Редактировать блюдо' : 'Новое блюдо'} onClose={onClose}>
+    <Sheet title={recipe ? 'Редактировать блюдо' : 'Новое блюдо'} onClose={cancel}>
       <div className="stack">
         <Field label="Название">
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
@@ -315,13 +329,7 @@ export function RecipeEditor({
               />
             </label>
             {photoId && (
-              <button
-                className="btn btn-sm btn-ghost"
-                onClick={() => {
-                  void discardPhoto(photoId)
-                  setPhotoId(undefined)
-                }}
-              >
+              <button className="btn btn-sm btn-ghost" onClick={() => setPhotoId(undefined)}>
                 Убрать
               </button>
             )}
@@ -329,7 +337,7 @@ export function RecipeEditor({
         </div>
 
         <div className="row" style={{ marginTop: 6 }}>
-          <button className="btn grow" onClick={onClose}>
+          <button className="btn grow" onClick={cancel}>
             Отмена
           </button>
           <button className="btn btn-primary grow" onClick={submit}>

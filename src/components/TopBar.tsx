@@ -41,12 +41,20 @@ export function TopBar({
       )}
       <h1>
         {title}
-        {subtitle && <div className="topbar-sub">{subtitle}</div>}
-        {!subtitle && (
-          <div className="topbar-sub row" style={{ gap: 5 }}>
-            <span className={classNames('sync-dot', sync.status)} />
-            {SYNC_TEXT[sync.status]}
-          </div>
+        {/*
+          Когда всё в порядке, статус синхронизации не показываем: строчка
+          «Синхронизировано» под каждым заголовком — шум, а не информация.
+          Проблемы, наоборот, видно всегда.
+        */}
+        {subtitle ? (
+          <div className="topbar-sub">{subtitle}</div>
+        ) : (
+          sync.status !== 'idle' && (
+            <div className="topbar-sub row" style={{ gap: 5 }}>
+              <span className={classNames('sync-dot', sync.status)} />
+              {SYNC_TEXT[sync.status]}
+            </div>
+          )
         )}
       </h1>
       {actions}

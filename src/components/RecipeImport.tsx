@@ -3,7 +3,7 @@ import { useStore } from '../lib/store'
 import { Field, Sheet, toast } from './ui'
 import { IconCheck, IconCopy } from './Icons'
 import { buildImportPrompt, parseImportedRecipes, toRecipeDraft, type ImportedRecipe } from '../lib/recipeImport'
-import { formatAmount } from '../lib/util'
+import { countOf, formatAmount } from '../lib/util'
 
 /**
  * Импорт рецепта через любой чат-бот: приложение отдаёт готовый запрос,
@@ -87,8 +87,8 @@ export function RecipeImport({ onClose }: { onClose: () => void }) {
                     {[
                       recipe.category,
                       recipe.timeMin ? `${recipe.timeMin} мин` : null,
-                      recipe.servings ? `${recipe.servings} порц.` : null,
-                      `${recipe.ingredients.length} ингредиентов`,
+                      recipe.servings ? countOf(recipe.servings, 'serving') : null,
+                      countOf(recipe.ingredients.length, 'ingredient'),
                     ]
                       .filter(Boolean)
                       .join(' · ')}
