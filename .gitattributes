@@ -1,0 +1,4 @@
+# В репозитории держим LF, чтобы сборка на Linux в GitHub Actions видела те же файлы,
+# что и локальная на Windows.
+* text=auto eol=lf
+*.png binary

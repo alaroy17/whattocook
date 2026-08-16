@@ -1,0 +1,7 @@
+node_modules/
+dist/
+public/icons/
+.DS_Store
+*.local
+.env
+.vite/

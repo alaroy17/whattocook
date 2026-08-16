@@ -1,0 +1,26 @@
+{
+  "name": "what-to-cook",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "PWA-дневник еды: рецепты, история, планировщик и список покупок с хранением базы в Google Drive",
+  "scripts": {
+    "icons": "node scripts/gen-icons.mjs",
+    "dev": "vite",
+    "build": "npm run icons && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^7.0.0"
+  }
+}

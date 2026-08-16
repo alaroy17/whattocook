@@ -1,0 +1,289 @@
+import { useMemo, useState } from 'react'
+import { UNITS, type Chef, type Recipe, type RecipeIngredient } from '../types'
+import { categoryOptions } from '../lib/categories'
+import { useStore } from '../lib/store'
+import { Field, Sheet, UserPicker, toast } from './ui'
+import { IconPhoto, IconPlus, IconTrash } from './Icons'
+import { uploadRecipePhoto } from '../lib/photos'
+import { Thumb } from './RecipeRow'
+import * as drive from '../lib/drive'
+
+const EMPTY_INGREDIENT: RecipeIngredient = { name: '', qty: null, unit: 'г' }
+
+export function RecipeEditor({
+  recipe,
+  onClose,
+  onSaved,
+}: {
+  recipe?: Recipe
+  onClose: () => void
+  onSaved?: (recipe: Recipe) => void
+}) {
+  const { db, saveRecipe } = useStore()
+  const categories = categoryOptions(db, recipe?.category)
+  const [name, setName] = useState(recipe?.name ?? '')
+  const [category, setCategory] = useState<string>(recipe?.category ?? categories[0] ?? 'Основное')
+  const [regular, setRegular] = useState(Boolean(recipe?.regular))
+  const [regularEveryDays, setRegularEveryDays] = useState(
+    recipe?.regularEveryDays != null ? String(recipe.regularEveryDays) : '7',
+  )
+  const [tags, setTags] = useState((recipe?.tags ?? []).join(', '))
+  const [timeMin, setTimeMin] = useState(recipe?.timeMin?.toString() ?? '')
+  const [servings, setServings] = useState(recipe?.servings?.toString() ?? '')
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3>(recipe?.difficulty ?? 1)
+  const [chef, setChef] = useState<Chef>(recipe?.chef ?? 'any')
+  const [steps, setSteps] = useState(recipe?.steps ?? '')
+  const [sourceUrl, setSourceUrl] = useState(recipe?.sourceUrl ?? '')
+  const [photoId, setPhotoId] = useState(recipe?.photoId)
+  const [uploading, setUploading] = useState(false)
+  const [ingredients, setIngredients] = useState<RecipeIngredient[]>(
+    recipe?.ingredients?.length ? recipe.ingredients : [{ ...EMPTY_INGREDIENT }],
+  )
+
+  /** Подсказки названий продуктов из каталога и других рецептов. */
+  const suggestions = useMemo(() => {
+    const names = new Set<string>()
+    for (const product of Object.values(db.products)) if (!product.deletedAt) names.add(product.name)
+    for (const item of Object.values(db.recipes)) {
+      if (item.deletedAt) continue
+      for (const ingredient of item.ingredients) if (ingredient.name) names.add(ingredient.name)
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, 'ru'))
+  }, [db.products, db.recipes])
+
+  const setIngredient = (index: number, patch: Partial<RecipeIngredient>) => {
+    setIngredients((list) => list.map((item, i) => (i === index ? { ...item, ...patch } : item)))
+  }
+
+  const onPickPhoto = async (file: File | undefined) => {
+    if (!file) return
+    if (!drive.hasToken()) {
+      toast('Сначала подключите Google Drive — фото хранятся там')
+      return
+    }
+    setUploading(true)
+    try {
+      setPhotoId(await uploadRecipePhoto(file))
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Не удалось загрузить фото')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const submit = () => {
+    if (!name.trim()) {
+      toast('Впишите название блюда')
+      return
+    }
+    const saved = saveRecipe({
+      id: recipe?.id,
+      name: name.trim(),
+      category,
+      tags: tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+      ingredients: ingredients.filter((item) => item.name.trim()),
+      steps,
+      timeMin: timeMin ? Number(timeMin) : null,
+      servings: servings ? Number(servings) : null,
+      difficulty,
+      chef,
+      favorite: recipe?.favorite ?? false,
+      ratings: recipe?.ratings ?? {},
+      sourceUrl: sourceUrl.trim() || undefined,
+      photoId,
+      archived: recipe?.archived,
+      regular,
+      regularEveryDays: regular ? Math.max(1, Number(regularEveryDays) || 7) : null,
+    })
+    onSaved?.(saved)
+    onClose()
+  }
+
+  return (
+    <Sheet title={recipe ? 'Редактировать блюдо' : 'Новое блюдо'} onClose={onClose}>
+      <div className="stack">
+        <Field label="Название">
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+
+        <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div className="grow">
+            <Field label="Категория">
+              <select className="input" value={category} onChange={(e) => setCategory(e.target.value)}>
+                {categories.map((item) => (
+                  <option key={item}>{item}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div style={{ width: 96 }}>
+            <Field label="Минут">
+              <input
+                className="input"
+                inputMode="numeric"
+                value={timeMin}
+                onChange={(e) => setTimeMin(e.target.value.replace(/\D/g, ''))}
+              />
+            </Field>
+          </div>
+          <div style={{ width: 96 }}>
+            <Field label="Порций">
+              <input
+                className="input"
+                inputMode="numeric"
+                value={servings}
+                onChange={(e) => setServings(e.target.value.replace(/\D/g, ''))}
+              />
+            </Field>
+          </div>
+        </div>
+
+        <Field label="Кто обычно готовит">
+          <UserPicker value={chef} onChange={(value) => setChef(value as Chef)} allowAny />
+        </Field>
+
+        <Field label="Сложность">
+          <div className="segmented">
+            {([1, 2, 3] as const).map((level) => (
+              <button
+                key={level}
+                className={difficulty === level ? 'active' : ''}
+                onClick={() => setDifficulty(level)}
+              >
+                {level === 1 ? 'Просто' : level === 2 ? 'Средне' : 'Заморочно'}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Теги" hint="Через запятую: острое, постное, на праздник">
+          <input className="input" value={tags} onChange={(e) => setTags(e.target.value)} />
+        </Field>
+
+        <div className="card" style={{ padding: '4px 14px' }}>
+          <label className="switch">
+            <span>
+              Едим регулярно
+              <div className="small muted">
+                Такие блюда живут отдельным списком на главной и предлагаются по своему ритму
+              </div>
+            </span>
+            <input type="checkbox" checked={regular} onChange={(e) => setRegular(e.target.checked)} />
+          </label>
+          {regular && (
+            <div className="row" style={{ paddingBottom: 12 }}>
+              <span className="small muted grow">Примерно раз в</span>
+              <input
+                className="input input-sm"
+                style={{ width: 74 }}
+                inputMode="numeric"
+                value={regularEveryDays}
+                onChange={(e) => setRegularEveryDays(e.target.value.replace(/\D/g, ''))}
+              />
+              <span className="small muted">дней</span>
+            </div>
+          )}
+        </div>
+
+        <div className="field">
+          <label>Ингредиенты</label>
+          <datalist id="product-names">
+            {suggestions.map((item) => (
+              <option key={item} value={item} />
+            ))}
+          </datalist>
+          <div className="stack" style={{ gap: 6 }}>
+            {ingredients.map((ingredient, index) => (
+              <div className="ingredient-row" key={index}>
+                <input
+                  className="input input-sm"
+                  list="product-names"
+                  placeholder="Продукт"
+                  value={ingredient.name}
+                  onChange={(e) => setIngredient(index, { name: e.target.value })}
+                />
+                <input
+                  className="input input-sm"
+                  inputMode="decimal"
+                  placeholder="кол-во"
+                  value={ingredient.qty ?? ''}
+                  onChange={(e) => {
+                    const raw = e.target.value.replace(',', '.').replace(/[^\d.]/g, '')
+                    setIngredient(index, { qty: raw === '' ? null : Number(raw) })
+                  }}
+                />
+                <select
+                  className="input input-sm"
+                  value={ingredient.unit}
+                  onChange={(e) => setIngredient(index, { unit: e.target.value })}
+                >
+                  {UNITS.map((unit) => (
+                    <option key={unit}>{unit}</option>
+                  ))}
+                </select>
+                <button
+                  className="icon-btn"
+                  onClick={() => setIngredients((list) => list.filter((_, i) => i !== index))}
+                  aria-label="Убрать ингредиент"
+                >
+                  <IconTrash size={17} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            className="btn btn-sm"
+            style={{ alignSelf: 'flex-start', marginTop: 6 }}
+            onClick={() => setIngredients((list) => [...list, { ...EMPTY_INGREDIENT }])}
+          >
+            <IconPlus size={15} /> Ингредиент
+          </button>
+        </div>
+
+        <Field label="Как готовить">
+          <textarea className="input" value={steps} onChange={(e) => setSteps(e.target.value)} />
+        </Field>
+
+        <Field label="Ссылка на рецепт" hint="Необязательно">
+          <input className="input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} />
+        </Field>
+
+        <div className="field">
+          <label>Фото</label>
+          <div className="row">
+            <div style={{ width: 76 }}>
+              <Thumb photoId={photoId} />
+            </div>
+            <label className="btn btn-sm">
+              <IconPhoto size={16} />
+              {uploading ? 'Загрузка…' : photoId ? 'Заменить' : 'Добавить'}
+              <input
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => void onPickPhoto(e.target.files?.[0])}
+              />
+            </label>
+            {photoId && (
+              <button className="btn btn-sm btn-ghost" onClick={() => setPhotoId(undefined)}>
+                Убрать
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="row" style={{ marginTop: 6 }}>
+          <button className="btn grow" onClick={onClose}>
+            Отмена
+          </button>
+          <button className="btn btn-primary grow" onClick={submit}>
+            Сохранить
+          </button>
+        </div>
+      </div>
+    </Sheet>
+  )
+}
