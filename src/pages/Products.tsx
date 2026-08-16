@@ -5,10 +5,11 @@ import { alive } from '../lib/db'
 import { PRODUCT_GROUPS, UNITS, type Product } from '../types'
 import { Confirm, Empty, Field, SearchInput, Sheet, toast } from '../components/ui'
 import { IconPlus, IconTrash } from '../components/Icons'
+import { SwipeRow } from '../components/SwipeRow'
 import { countOf, formatMoney, normalizeName, nowIso } from '../lib/util'
 
 export function Products() {
-  const { db } = useStore()
+  const { db, remove, restore } = useStore()
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<Product | 'new' | null>(null)
 
@@ -21,6 +22,17 @@ export function Products() {
     const query = normalizeName(search)
     return query ? products.filter((product) => normalizeName(product.name).includes(query)) : products
   }, [products, search])
+
+  /** Каталог группируется по отделам магазина — как холодильник и список покупок. */
+  const grouped = useMemo(() => {
+    const map = new Map<string, Product[]>()
+    for (const product of filtered) {
+      const list = map.get(product.group) ?? []
+      list.push(product)
+      map.set(product.group, list)
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'ru'))
+  }, [filtered])
 
   /** Ингредиенты из рецептов, которых ещё нет в каталоге — их удобно добавить одним нажатием. */
   const missing = useMemo(() => {
@@ -51,8 +63,8 @@ export function Products() {
       <main className="content">
         <SearchInput value={search} onChange={setSearch} placeholder="Название продукта" />
 
-        <div className="card-flat" style={{ marginTop: 12 }}>
-          {filtered.length === 0 ? (
+        {filtered.length === 0 ? (
+          <div style={{ marginTop: 12 }}>
             <Empty
               title="Каталог пуст"
               text="Добавьте продукты — тогда приложение посчитает стоимость блюд и соберёт список покупок"
@@ -62,29 +74,51 @@ export function Products() {
                 </button>
               }
             />
-          ) : (
-            filtered.map((product) => (
-              <div key={product.id} className="shop-item" onClick={() => setEditing(product)}>
-                <span
-                  className="sync-dot"
-                  style={{ background: product.inStock ? 'var(--good)' : 'var(--border-strong)' }}
-                  title={product.inStock ? 'Есть дома' : 'Нет дома'}
-                />
-                <span className="grow shop-name">
-                  {product.name}
-                  <div className="small muted">{product.group}</div>
-                </span>
-                <span className="small muted">
-                  {product.price != null
-                    ? `${formatMoney(product.price * (product.unit === 'г' || product.unit === 'мл' ? 1000 : 1), db.settings.currency)} / ${
-                        product.unit === 'г' ? 'кг' : product.unit === 'мл' ? 'л' : product.unit
-                      }`
-                    : 'цена не указана'}
-                </span>
+          </div>
+        ) : (
+          grouped.map(([group, items]) => (
+            <div key={group}>
+              <div className="group-title">{group}</div>
+              <div className="card-flat">
+                {items.map((product) => (
+                  <SwipeRow
+                    key={product.id}
+                    actions={[
+                      { label: 'Изменить', kind: 'normal', onClick: () => setEditing(product) },
+                      {
+                        label: 'Удалить',
+                        kind: 'danger',
+                        onClick: () => {
+                          remove('products', product.id)
+                          toast(`«${product.name}» удалён`, {
+                            label: 'Отменить',
+                            onClick: () => restore('products', product.id),
+                          })
+                        },
+                      },
+                    ]}
+                  >
+                    <div className="shop-item" onClick={() => setEditing(product)}>
+                      <span
+                        className="sync-dot"
+                        style={{ background: product.inStock ? 'var(--good)' : 'var(--border-strong)' }}
+                        title={product.inStock ? 'Есть дома' : 'Нет дома'}
+                      />
+                      <span className="grow shop-name">{product.name}</span>
+                      <span className="small muted">
+                        {product.price != null
+                          ? `${formatMoney(product.price * (product.unit === 'г' || product.unit === 'мл' ? 1000 : 1), db.settings.currency)} / ${
+                              product.unit === 'г' ? 'кг' : product.unit === 'мл' ? 'л' : product.unit
+                            }`
+                          : 'без цены'}
+                      </span>
+                    </div>
+                  </SwipeRow>
+                ))}
               </div>
-            ))
-          )}
-        </div>
+            </div>
+          ))
+        )}
 
         {missing.length > 0 && (
           <section className="section">

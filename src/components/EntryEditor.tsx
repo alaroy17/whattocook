@@ -6,8 +6,6 @@ import { Avatar, Confirm, Field, Segmented, Sheet, Stars, UserPicker, toast } fr
 import { RecipePicker } from './RecipePicker'
 import { buildProductIndex, recipeCost, servingsMultiplier } from '../lib/cost'
 import { alive } from '../lib/db'
-import { formatDate } from '../lib/date'
-import { countOf } from '../lib/util'
 import { IconTrash } from './Icons'
 
 export function EntryEditor({
@@ -70,7 +68,9 @@ export function EntryEditor({
   return (
     <>
       <Sheet
-        title={entry ? 'Запись' : status === 'planned' ? 'Запланировать' : 'Что ели'}
+        title={
+          recipe?.name ?? (title || (entry ? 'Запись' : status === 'planned' ? 'Запланировать' : 'Что ели'))
+        }
         onClose={onClose}
         actions={
           entry ? (
@@ -151,20 +151,40 @@ export function EntryEditor({
             )}
           </div>
 
-          {recipe?.servings != null && (
-            <Field
-              label="Порций"
-              hint={`В рецепте ${countOf(recipe.servings, 'serving')} — количество в списке покупок пересчитается`}
-            >
-              <input
-                className="input"
-                inputMode="numeric"
-                placeholder={String(recipe.servings)}
-                value={servings}
-                onChange={(e) => setServings(e.target.value.replace(/\D/g, ''))}
-              />
-            </Field>
-          )}
+          {/* Порции и стоимость — второстепенные числа, им хватает одной строки */}
+          <div className="row">
+            {recipe?.servings != null && (
+              <div className="grow">
+                <Field label="Порций">
+                  <input
+                    className="input"
+                    inputMode="numeric"
+                    placeholder={String(recipe.servings)}
+                    value={servings}
+                    onChange={(e) => setServings(e.target.value.replace(/\D/g, ''))}
+                  />
+                </Field>
+              </div>
+            )}
+            <div className="grow">
+              <Field
+                label="Стоимость"
+                hint={
+                  estimated && estimated.known > 0
+                    ? `по ценам ~${Math.round(estimated.total)} ${db.settings.currency}`
+                    : undefined
+                }
+              >
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  placeholder={estimated && estimated.known > 0 ? String(Math.round(estimated.total)) : ''}
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value.replace(/[^\d.,]/g, ''))}
+                />
+              </Field>
+            </div>
+          </div>
 
           <Field label="Кто готовил">
             <UserPicker value={cook} onChange={(value) => setCook(value as Cook)} allowBoth />
@@ -196,25 +216,6 @@ export function EntryEditor({
               onChange={(e) => setNote(e.target.value)}
             />
           </Field>
-
-          <Field
-            label="Стоимость"
-            hint={
-              estimated && estimated.known > 0
-                ? `По каталогу цен примерно ${Math.round(estimated.total)} ${db.settings.currency}`
-                : 'Необязательно'
-            }
-          >
-            <input
-              className="input"
-              inputMode="decimal"
-              placeholder={estimated && estimated.known > 0 ? String(Math.round(estimated.total)) : ''}
-              value={cost}
-              onChange={(e) => setCost(e.target.value.replace(/[^\d.,]/g, ''))}
-            />
-          </Field>
-
-          {date && <div className="small muted">{formatDate(date, { weekday: true, year: true })}</div>}
 
           <div className="row" style={{ marginTop: 6 }}>
             <button className="btn grow" onClick={onClose}>

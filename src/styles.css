@@ -1038,7 +1038,8 @@ textarea.input {
 
 .swipe-row:last-child { border-bottom: 0; }
 
-.swipe-row .recipe-row { border-bottom: 0; }
+.swipe-row .recipe-row,
+.swipe-row .shop-item { border-bottom: 0; }
 
 .swipe-actions {
   position: absolute;
