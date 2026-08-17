@@ -92,26 +92,6 @@ export function Today() {
     })
   }
 
-  /** Постоянные блюда — быстрая запись «съели»: одним нажатием, тоже без дублей. */
-  const logRegular = (recipeId: string) => {
-    const existing = entryForRecipeOn(db, date, recipeId)
-    if (existing) {
-      if (existing.status === 'planned') {
-        saveEntry({ id: existing.id, status: 'done' })
-        toast('Отметили приготовленным')
-      } else {
-        toast('Сегодня уже записано')
-      }
-      return
-    }
-    const meal = guessMeal(db.recipes[recipeId]?.category)
-    const saved = saveEntry({ date, meal, status: 'done', recipeId })
-    toast(`Записали — ${mealName(meal).toLowerCase()}`, {
-      label: 'Изменить',
-      onClick: () => setEditingEntry(saved.id),
-    })
-  }
-
   // Давность и так написана рядом с названием — в бейджах она была бы повтором.
   const badgeReasons = (reasons: string[]) =>
     reasons.filter((reason) => !/^(не готовили|ещё ни разу)/.test(reason))
@@ -280,7 +260,11 @@ export function Today() {
           </section>
         )}
 
-        {/* Постоянное — быстрые записи «съели как обычно», после блока решения */}
+        {/*
+          Постоянное добавляется в день так же, как всё остальное, — планом.
+          Раньше карточка сразу писала «приготовили», и блюдо появлялось в списке
+          с проставленной галочкой — выглядело как баг.
+        */}
         {regulars.length > 0 && (
           <section className="section">
             <div className="section-head">
@@ -295,7 +279,7 @@ export function Today() {
                 <button
                   key={item.recipe.id}
                   className={`regular-card${item.due ? ' due' : ''}`}
-                  onClick={() => logRegular(item.recipe.id)}
+                  onClick={() => addToday(item.recipe.id)}
                 >
                   <span className="name">{item.recipe.name}</span>
                   <span className="small muted">{agoWord(item.days)}</span>

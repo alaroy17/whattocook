@@ -180,13 +180,17 @@ export function pickRandom(suggestions: Suggestion[], fair = false): Suggestion 
 
 /**
  * Куда записать блюдо, если приём пищи не выбирали явно.
- * Сначала смотрим на раздел, потом на время суток — иначе сырники,
- * записанные утром одной кнопкой, попадали бы в «Ужин».
+ *
+ * Для блюда решает раздел, а не время суток: плов, добавленный утром, — это план
+ * на ужин, а не «завтрак, потому что сейчас утро». Время суток используется только
+ * для свободной записи без блюда («Записать…») — там человек фиксирует то, что ест
+ * прямо сейчас.
  */
 export function guessMeal(category: string | undefined, at: Date = new Date()): MealSlot {
   if (category === 'Завтрак') return 'breakfast'
   if (category === 'Суп') return 'lunch'
   if (category === 'Десерт' || category === 'Выпечка' || category === 'Закуска') return 'snack'
+  if (category !== undefined) return 'dinner'
   const hour = at.getHours()
   if (hour < 11) return 'breakfast'
   if (hour < 16) return 'lunch'
