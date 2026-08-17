@@ -45,7 +45,8 @@ function CategoryManager() {
   }
 
   const row = (category: string, on: boolean, index: number) => (
-    <div className="cat-row" key={category}>
+    // label, а не div: по названию раздела тоже нужно попадать пальцем
+    <label className="cat-row" key={category}>
       <input type="checkbox" checked={on} onChange={(event) => toggle(category, event.target.checked)} />
       <span className="grow">
         {category}
@@ -53,10 +54,18 @@ function CategoryManager() {
       </span>
       {on && (
         <>
-          <button className="order-btn" disabled={index === 0} onClick={() => move(index, -1)} aria-label="Выше">
+          {/* type=button обязателен: внутри label кнопка по умолчанию сабмитит */}
+          <button
+            type="button"
+            className="order-btn"
+            disabled={index === 0}
+            onClick={() => move(index, -1)}
+            aria-label="Выше"
+          >
             <IconChevronRight size={16} style={{ transform: 'rotate(-90deg)' }} />
           </button>
           <button
+            type="button"
             className="order-btn"
             disabled={index === enabled.length - 1}
             onClick={() => move(index, 1)}
@@ -66,7 +75,7 @@ function CategoryManager() {
           </button>
         </>
       )}
-    </div>
+    </label>
   )
 
   return (
@@ -173,7 +182,7 @@ export function SettingsPage() {
               </div>
             )}
             {sync.status === 'error' && sync.message && (
-              <div className="small" style={{ marginTop: 6, color: '#b0432f' }}>
+              <div className="small" style={{ marginTop: 6, color: 'var(--danger)' }}>
                 {sync.message}
               </div>
             )}

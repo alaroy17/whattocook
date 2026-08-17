@@ -71,7 +71,7 @@ export function RecipeImport({ onClose }: { onClose: () => void }) {
         </Field>
 
         {error && (
-          <div className="small" style={{ color: '#b0432f' }}>
+          <div className="small" style={{ color: 'var(--danger)' }}>
             {error}
           </div>
         )}

@@ -55,7 +55,7 @@ export function History() {
         ) : (
           <>
             {error && (
-              <div className="small" style={{ color: '#b0432f', marginBottom: 10 }}>
+              <div className="small" style={{ color: 'var(--danger)', marginBottom: 10 }}>
                 {error}
               </div>
             )}

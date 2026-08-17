@@ -112,7 +112,7 @@ export function Recipes() {
           </button>
         }
       />
-      <main className="content">
+      <main className="content with-fab">
         <SearchInput value={search} onChange={setSearch} placeholder="Блюдо, продукт или тег" />
 
         {categories.length > 1 && (

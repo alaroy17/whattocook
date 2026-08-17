@@ -8,7 +8,8 @@
   --border-strong: #d8cbb8;
   --text: #2c2622;
   --text-2: #5d544c;
-  --muted: #8d8175;
+  /* Подписи мелкие, поэтому темнее: прежний оттенок давал контраст 3,5 */
+  --muted: #7a6f64;
   --accent: #c1613f;
   --accent-hover: #a94f30;
   --accent-soft: #f7e7df;
@@ -16,6 +17,7 @@
   --good: #6c8a5a;
   --good-soft: #eaf1e2;
   --warn: #b3822f;
+  --danger: #b0432f;
   /* Тень — только у всплывающих штук. Карточки держатся на границах и воздухе. */
   --shadow: 0 1px 2px rgba(60, 42, 28, 0.05), 0 8px 24px -12px rgba(60, 42, 28, 0.18);
   --shadow-lift: 0 10px 30px -12px rgba(60, 42, 28, 0.3);
@@ -51,6 +53,8 @@
   --good: #91ad7c;
   --good-soft: #2a3122;
   --warn: #d3a55c;
+  /* На тёмном фоне тот же красный давал контраст 2,8 — текст едва читался */
+  --danger: #e8836b;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 28px -14px rgba(0, 0, 0, 0.7);
   color-scheme: dark;
 }
@@ -138,6 +142,17 @@ button {
   font-weight: 400;
   letter-spacing: 0;
   margin-top: 2px;
+  /* text-overflow не наследуется: длинный подзаголовок обрезался «под нож» */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Ползунки: 16 px по высоте пальцем не поймать */
+input[type='range'] {
+  width: 100%;
+  height: 40px;
+  accent-color: var(--accent);
+  background: transparent;
 }
 
 .content {
@@ -241,7 +256,9 @@ button {
   flex: 1;
 }
 
-.section-head .link {
+/* Текстовая кнопка-ссылка. Правило было привязано к .section-head, и такие же
+   кнопки в других местах («К сегодня», «К текущей») браузер рисовал системными. */
+.link {
   font-size: 13px;
   color: var(--accent-text);
   cursor: pointer;
@@ -315,7 +332,7 @@ button {
 :root[data-theme='dark'] .fab,
 :root[data-theme='dark'] .week-day.is-today .week-date { color: #1d1a16; }
 
-:root[data-theme='dark'] .week-day.is-today .week-date .wd { color: rgba(29, 26, 22, 0.65); }
+:root[data-theme='dark'] .week-day.is-today .week-date .wd { color: rgba(29, 26, 22, 0.85); }
 
 .btn-ghost {
   background: transparent;
@@ -326,7 +343,7 @@ button {
 
 .btn-ghost:hover { background: var(--bg-soft); }
 
-.btn-danger { color: #b0432f; border-color: var(--border); }
+.btn-danger { color: var(--danger); border-color: var(--border); }
 
 .btn-sm { min-height: 34px; padding: 7px 13px; font-size: var(--text-sm); }
 .btn-block { width: 100%; }
@@ -541,9 +558,9 @@ textarea.input {
 .stars button {
   border: 0;
   background: none;
-  /* запас под палец: сама звезда 18 px, зона нажатия — 30 px */
-  padding: 6px;
-  margin: -2px;
+  /* запас под палец: сама звезда 18 px, зона нажатия — 40 px */
+  padding: 11px;
+  margin: -7px;
   cursor: pointer;
   color: var(--border-strong);
   line-height: 0;
@@ -722,6 +739,8 @@ textarea.input {
 
 .cal-day:active { transform: scale(0.97); }
 .cal-day.other { opacity: 0.35; }
+/* На тёмном фоне 0.35 делали число почти невидимым */
+:root[data-theme='dark'] .cal-day.other { opacity: 0.55; }
 .cal-day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .cal-day.selected { background: var(--accent-soft); border-color: var(--accent); }
 .cal-day.weekend { background: var(--surface-2); }
@@ -881,6 +900,23 @@ textarea.input {
   cursor: pointer;
 }
 
+/* Нажимается вся середина чипа, а не одна строка названия */
+.week-chip .label-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  margin: -6px 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .week-chip .label {
   min-width: 0;
   flex: 0 1 auto;
@@ -932,6 +968,18 @@ textarea.input {
   padding: 9px 13px;
   border-bottom: 1px solid var(--border);
   cursor: pointer;
+}
+
+/* Строка списка иногда сама кнопка — без сброса браузер рисует её системной */
+button.shop-item {
+  width: 100%;
+  background: none;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
 }
 
 .shop-item:last-child { border-bottom: 0; }
@@ -1034,6 +1082,11 @@ textarea.input {
 
 .empty h3 { color: var(--text); margin-bottom: 6px; }
 
+/* Экран с круглой кнопкой: запас снизу больше, иначе она накрывает
+   последнюю строку списка, а плашка обновления — саму кнопку */
+.content.with-fab { padding-bottom: calc(146px + env(safe-area-inset-bottom)); }
+.content.with-fab ~ .update-bar { bottom: calc(140px + env(safe-area-inset-bottom)); }
+
 .fab {
   position: fixed;
   right: 16px;
@@ -1095,8 +1148,14 @@ textarea.input {
   touch-action: pan-y;
 }
 
-/* Кружок-статус: пустой — планируем, с галкой — приготовили */
+/* Кружок-статус: пустой — планируем, с галкой — приготовили.
+   Сам кружок 26 px, но зона нажатия расширена паддингом до 40 —
+   это главный жест на экране «Сегодня», мимо него промахивались. */
 .status-toggle {
+  align-self: center;
+  box-sizing: content-box;
+  padding: 7px;
+  margin: -7px;
   width: 26px;
   height: 26px;
   border-radius: 999px;
@@ -1107,9 +1166,10 @@ textarea.input {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s;
+  /* Фон и рамка — только на самом кружке, а не на зоне нажатия */
+  background-clip: content-box;
 }
 
 .status-toggle.done {
@@ -1261,7 +1321,9 @@ select.plain {
   background: none;
   color: var(--muted);
   cursor: pointer;
-  padding: 2px 4px;
+  /* Две стрелки рядом по 24 px — пальцем не попасть; зона нажатия 40 px */
+  padding: 12px 10px;
+  margin: -10px -6px;
   line-height: 0;
 }
 
@@ -1326,7 +1388,8 @@ select.plain {
 
 .ingredient-row {
   display: grid;
-  grid-template-columns: 1fr 58px 78px 34px;
+  /* Последняя колонка ровно под .icon-btn: с 34 px корзина вылезала из ряда */
+  grid-template-columns: 1fr 58px 78px 40px;
   gap: 6px;
   align-items: center;
 }

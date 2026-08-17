@@ -60,7 +60,7 @@ export function Products() {
         showUser={false}
         subtitle={`${countOf(products.length, 'product')}${withoutPrice > 0 ? ` · без цены: ${withoutPrice}` : ''}`}
       />
-      <main className="content">
+      <main className="content with-fab">
         <SearchInput value={search} onChange={setSearch} placeholder="Название продукта" />
 
         {filtered.length === 0 ? (
@@ -150,7 +150,7 @@ export function Products() {
         )}
       </main>
 
-      <button className="fab" onClick={() => setEditing('new')} aria-label="Добавить продукт">
+      <button className="fab" onClick={() => setEditing('new')} aria-label="Добавить продукт" type="button">
         <IconPlus size={24} />
       </button>
 

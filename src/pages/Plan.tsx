@@ -192,17 +192,18 @@ export function Plan() {
                             ),
                           }}
                         />
-                        <button
-                          className="label"
-                          style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', color: 'inherit' }}
-                          onClick={() => setAction(entry)}
-                        >
-                          {nameOf(entry)}
+                        {/*
+                          Кнопка охватывает название и приём пищи: раньше
+                          нажималась только строка текста высотой 19 px,
+                          и тап чуть мимо не открывал ничего.
+                        */}
+                        <button className="label-btn" onClick={() => setAction(entry)}>
+                          <span className="label">{nameOf(entry)}</span>
+                          <span className="slot">
+                            {MEAL_SLOTS.find((m) => m.id === entry.meal)?.name}
+                            {entry.leftovers ? ' · доедаем' : ''}
+                          </span>
                         </button>
-                        <span className="slot">
-                          {MEAL_SLOTS.find((m) => m.id === entry.meal)?.name}
-                          {entry.leftovers ? ' · доедаем' : ''}
-                        </span>
                         {entry.cook && <Avatar id={entry.cook} />}
                         {entry.status === 'planned' && (
                           <button

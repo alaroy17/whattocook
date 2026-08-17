@@ -6,7 +6,6 @@ import {
   addDays,
   addMonths,
   dateRange,
-  endOfMonth,
   formatDate,
   formatMonth,
   fromIsoDate,
@@ -58,7 +57,12 @@ export function CalendarPage() {
     () =>
       [-1, 0, 1].map((offset) => {
         const start = addMonths(month, offset)
-        return { month: start, grid: dateRange(startOfWeek(start), addDays(startOfWeek(endOfMonth(start)), 6)) }
+        const from = startOfWeek(start)
+        /*
+         * Всегда шесть недель: у месяцев бывает 5 рядов, и лента (её высота —
+         * по самой длинной странице) оставляла под короткой пустую полосу.
+         */
+        return { month: start, grid: dateRange(from, addDays(from, 41)) }
       }),
     [month],
   )
