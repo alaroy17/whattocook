@@ -55,7 +55,12 @@ export function Today() {
 
   const fresh = suggestions.filter((item) => !item.tooRecent)
   const recent = suggestions.filter((item) => item.tooRecent)
-  const hero: Suggestion | null = mode === 'random' ? random : fresh[0] ?? null
+  /*
+   * Кнопка «другое блюдо» листает подсказки по кругу. Раньше seed влиял только
+   * на случайный выбор, и в режиме «Подсказка» нажатие ничего не меняло.
+   */
+  const hero: Suggestion | null =
+    mode === 'random' ? random : fresh.length > 0 ? fresh[seed % fresh.length] : null
   const rest = fresh.filter((item) => item.recipe.id !== hero?.recipe.id).slice(0, 8)
 
   const todayEntries = useMemo(

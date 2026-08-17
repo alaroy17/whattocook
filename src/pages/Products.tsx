@@ -245,7 +245,8 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
 
           <div className="row">
             <div className="grow">
-              <Field label={`Сколько в упаковке, ${unit}`}>
+              {/* Формулировка одна на все единицы: «сколько упаковок в упаковке» — цирк */}
+              <Field label={unit ? `Сколько покупаем, ${unit}` : 'Сколько покупаем'}>
                 <input
                   className="input"
                   inputMode="decimal"
@@ -255,7 +256,7 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
               </Field>
             </div>
             <div className="grow">
-              <Field label={`Цена упаковки, ${db.settings.currency}`}>
+              <Field label={`Цена за это, ${db.settings.currency}`}>
                 <input
                   className="input"
                   inputMode="decimal"
@@ -267,7 +268,9 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
           </div>
 
           {needsQty && (
-            <div className="small muted">Укажите объём упаковки, иначе цену не посчитать</div>
+            <div className="small muted">
+              Укажите количество{unit ? ` в ${unit}` : ''}, иначе цену не посчитать
+            </div>
           )}
           {unitPrice != null && (
             <div className="small muted">

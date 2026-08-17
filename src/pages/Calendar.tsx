@@ -108,10 +108,34 @@ export function CalendarPage() {
    */
   const swipeStart = useRef<{ x: number; y: number; id: number } | null>(null)
   const suppressClick = useRef(false)
+  /** Сдвиг сетки за пальцем и сторона, с которой въезжает новый месяц. */
+  const [drag, setDrag] = useState(0)
+  const [snapping, setSnapping] = useState(false)
+  const [dir, setDir] = useState<'left' | 'right' | null>(null)
+
+  const goMonth = (step: number) => {
+    setDir(step > 0 ? 'left' : 'right')
+    setMonth(addMonths(month, step))
+  }
+
   const onPointerDown = (event: React.PointerEvent) => {
     if (!event.isPrimary) return
     swipeStart.current = { x: event.clientX, y: event.clientY, id: event.pointerId }
     suppressClick.current = false
+    setSnapping(false)
+  }
+  const onPointerMove = (event: React.PointerEvent) => {
+    const start = swipeStart.current
+    if (!start || event.pointerId !== start.id) return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    // Пока жест не стал явно горизонтальным, сетку не двигаем — это прокрутка.
+    if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.2) return
+    setDrag(dx * 0.85)
+  }
+  const settle = () => {
+    setSnapping(true)
+    setDrag(0)
   }
   const onPointerUp = (event: React.PointerEvent) => {
     const start = swipeStart.current
@@ -120,7 +144,10 @@ export function CalendarPage() {
     swipeStart.current = null
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
-    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.5) {
+      settle()
+      return
+    }
     suppressClick.current = true
     /*
      * На телефоне click после свайпа не приходит вовсе, и взведённый флаг
@@ -130,7 +157,13 @@ export function CalendarPage() {
     setTimeout(() => {
       suppressClick.current = false
     }, 0)
-    setMonth(addMonths(month, dx < 0 ? 1 : -1))
+    /*
+     * Сдвиг сбрасываем без анимации: месяц меняется, сетка пересобирается
+     * с новым ключом и въезжает своей анимацией с нужной стороны.
+     */
+    setSnapping(false)
+    setDrag(0)
+    goMonth(dx < 0 ? 1 : -1)
   }
   const onClickCapture = (event: React.MouseEvent) => {
     if (!suppressClick.current) return
@@ -146,10 +179,10 @@ export function CalendarPage() {
         subtitle={`${countOf(cooked.length, 'cooking')}${monthCost > 0 ? ` · ${formatMoney(monthCost, db.settings.currency)}` : ''}`}
         actions={
           <>
-            <button className="icon-btn" onClick={() => setMonth(addMonths(month, -1))} aria-label="Предыдущий месяц">
+            <button className="icon-btn" onClick={() => goMonth(-1)} aria-label="Предыдущий месяц">
               <IconChevronLeft />
             </button>
-            <button className="icon-btn" onClick={() => setMonth(addMonths(month, 1))} aria-label="Следующий месяц">
+            <button className="icon-btn" onClick={() => goMonth(1)} aria-label="Следующий месяц">
               <IconChevronRight />
             </button>
           </>
@@ -161,8 +194,12 @@ export function CalendarPage() {
         className="content"
         style={{ touchAction: 'pan-y' }}
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={() => (swipeStart.current = null)}
+        onPointerCancel={() => {
+          swipeStart.current = null
+          settle()
+        }}
         onClickCapture={onClickCapture}
       >
         <div className="row-between" style={{ marginBottom: 12 }}>
@@ -183,7 +220,17 @@ export function CalendarPage() {
 
         {view === 'month' ? (
           <>
-            <div className="cal">
+            {/*
+              Два слоя намеренно: дорожка держит сдвиг за пальцем, сетка внутри —
+              анимацию въезда. На одном элементе inline-transform и CSS-анимация
+              дерутся за одно свойство, и сетка застревала сдвинутой.
+            */}
+            <div className="cal-viewport">
+              <div
+                className={classNames('cal-track', snapping && 'snap')}
+                style={drag !== 0 ? { transform: `translateX(${drag}px)` } : undefined}
+              >
+              <div key={month} className={classNames('cal', dir && `in-${dir}`)}>
               {WEEKDAYS_SHORT.map((day) => (
                 <div className="cal-head" key={day}>
                   {day}
@@ -228,6 +275,8 @@ export function CalendarPage() {
                   </button>
                 )
               })}
+              </div>
+              </div>
             </div>
 
             <section className="section">

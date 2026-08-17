@@ -4,8 +4,8 @@ import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
 import { PRODUCT_GROUPS, type Product } from '../types'
-import { Empty, Field, Sheet, toast } from '../components/ui'
-import { IconCheck, IconPlus, IconTag } from '../components/Icons'
+import { Empty, Field, Sheet } from '../components/ui'
+import { IconPlus, IconTag } from '../components/Icons'
 import { agoWord, countOf, normalizeName, nowIso } from '../lib/util'
 import { fridgeStaleDays } from '../lib/fridge'
 
@@ -24,21 +24,18 @@ export function Fridge() {
     [products],
   )
 
-  /** Продукты, которые чаще всего встречаются в рецептах — их удобно отмечать в один тап. */
-  const common = useMemo(() => {
-    const uses = new Map<string, number>()
-    for (const recipe of alive(db.recipes)) {
-      for (const ingredient of recipe.ingredients) {
-        const key = normalizeName(ingredient.name)
-        uses.set(key, (uses.get(key) ?? 0) + 1)
-      }
-    }
-    return products
-      .filter((product) => !product.inStock)
-      .map((product) => ({ product, uses: uses.get(normalizeName(product.name)) ?? 0 }))
-      .sort((a, b) => b.uses - a.uses || a.product.name.localeCompare(b.product.name, 'ru'))
-      .slice(0, 24)
-  }, [products, db.recipes])
+  /**
+   * Всё, чего нет дома, — целиком и по алфавиту. Прежняя выборка «самого
+   * популярного» из двух десятков строк заставляла искать нужное поиском,
+   * хотя по списку удобнее просто пройтись сверху вниз и отметить.
+   */
+  const rest = useMemo(
+    () =>
+      products
+        .filter((product) => !product.inStock)
+        .sort((a, b) => a.name.localeCompare(b.name, 'ru')),
+    [products],
+  )
 
   const search = normalizeName(query)
   const found = search
@@ -58,8 +55,13 @@ export function Fridge() {
 
   const stale = fridgeStaleDays(db)
 
+  /*
+   * Любая отметка означает, что список сейчас актуален, — отдельная кнопка
+   * «Всё проверено» только вызывала вопрос, что она вообще делает.
+   */
   const setStock = (product: Product, inStock: boolean) => {
     saveProduct({ id: product.id, inStock, stockUpdatedAt: nowIso() })
+    updateSettings({ fridgeReviewedAt: nowIso() })
   }
 
   return (
@@ -142,31 +144,27 @@ export function Fridge() {
           ))
         )}
 
-        {common.length > 0 && (
+        {rest.length > 0 && (
           <section className="section">
             <div className="section-head">
-              <h2>Обычно берём</h2>
+              <h2>Чего нет</h2>
+              <span className="small muted">{countOf(rest.length, 'product')}</span>
             </div>
-            <div className="chips" style={{ flexWrap: 'wrap' }}>
-              {common.map(({ product }) => (
-                <button key={product.id} className="chip" onClick={() => setStock(product, true)}>
-                  {product.name}
-                </button>
+            <div className="card-flat">
+              {rest.map((product) => (
+                <div className="shop-item" key={product.id} onClick={() => setStock(product, true)}>
+                  <input type="checkbox" readOnly checked={false} />
+                  <span className="grow shop-name">
+                    {product.name}
+                    <div className="small muted">{product.group}</div>
+                  </span>
+                </div>
               ))}
             </div>
           </section>
         )}
 
-        <section className="section stack">
-          <button
-            className="btn btn-block"
-            onClick={() => {
-              updateSettings({ fridgeReviewedAt: nowIso() })
-              toast('Отметили, что список актуален')
-            }}
-          >
-            <IconCheck size={16} /> Всё проверено
-          </button>
+        <section className="section">
           <button className="btn btn-block" onClick={() => navigate('/more/products')}>
             <IconTag size={16} /> Каталог продуктов и цены
           </button>

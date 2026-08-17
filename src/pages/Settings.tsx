@@ -4,7 +4,7 @@ import { useStore } from '../lib/store'
 import * as drive from '../lib/drive'
 import { Avatar, Confirm, Field, Segmented, toast } from '../components/ui'
 import { CATEGORIES, emptyDatabase, USERS } from '../types'
-import { alive, mergeDatabases, normalizeDatabase, serialize } from '../lib/db'
+import { alive } from '../lib/db'
 import { uniqueCategories } from '../lib/categories'
 import { buildSeedDatabase } from '../lib/seed'
 import { daysWord } from '../lib/util'
@@ -142,26 +142,12 @@ export function SettingsPage() {
     }
   }
 
-  const exportJson = () => {
-    const blob = new Blob([serialize(db)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `what-to-cook-${new Date().toISOString().slice(0, 10)}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const importJson = async (file: File | undefined) => {
-    if (!file) return
-    try {
-      const parsed = normalizeDatabase(JSON.parse(await file.text()))
-      replaceDatabase(mergeDatabases(db, parsed))
-      toast('Данные добавлены')
-    } catch {
-      toast('Не получилось прочитать файл')
-    }
-  }
+/*
+ * Выгрузки и загрузки базы файлом здесь больше нет: копии и так делаются
+ * ежедневно в папку «История» на Диске, откуда всё возвращается в два нажатия,
+ * а ручной файл был ещё и дырой — правленый или чужой JSON уезжал на Диск
+ * и ронял оба телефона.
+ */
 
   return (
     <>
@@ -414,18 +400,6 @@ export function SettingsPage() {
             <h2>Данные</h2>
           </div>
           <div className="card stack">
-            <button className="btn btn-block" onClick={exportJson}>
-              Скачать копию файлом
-            </button>
-            <label className="btn btn-block">
-              Загрузить из файла
-              <input
-                type="file"
-                accept="application/json"
-                hidden
-                onChange={(event) => void importJson(event.target.files?.[0])}
-              />
-            </label>
             <button
               className="btn btn-block"
               onClick={() => {

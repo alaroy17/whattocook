@@ -663,10 +663,45 @@ textarea.input {
 }
 
 /* ─── Календарь ───────────────────────────────────────────────────────────── */
+/*
+ * Листание месяцев: сетка едет за пальцем, новый месяц въезжает с той стороны,
+ * откуда пришёл жест. Окно с overflow — чтобы уезжающая сетка не растягивала
+ * страницу вбок; выделение текста при перетаскивании мышью гасим.
+ */
+.cal-viewport {
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cal-track { will-change: transform; }
+
+/* Жест не дотянул до порога — сетка мягко возвращается на место */
+.cal-track.snap { transition: transform 0.18s ease-out; }
+
 .cal {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+}
+
+.cal.in-left { animation: cal-in-left 0.22s ease-out; }
+.cal.in-right { animation: cal-in-right 0.22s ease-out; }
+
+@keyframes cal-in-left {
+  from { transform: translateX(32%); opacity: 0.35; }
+  to { transform: none; opacity: 1; }
+}
+
+@keyframes cal-in-right {
+  from { transform: translateX(-32%); opacity: 0.35; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-track.snap { transition: none; }
+  .cal.in-left,
+  .cal.in-right { animation: none; }
 }
 
 .cal-head {
