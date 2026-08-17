@@ -6,6 +6,8 @@ import {
   normalizeDatabase,
   serialize,
   dedupeQuickEntries,
+  materializeIngredientProducts,
+  dedupeProducts,
 } from '../.check/db.mjs'
 
 let failed = 0
@@ -212,7 +214,55 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   check('записи с содержимым не тронуты', aliveOnes.filter((e) => e.recipeId === 'r2').length === 2)
 }
 
-// 8. Строки с диапазоном и запятой-пометкой (через полный normalizeDatabase не проверить —
+// 8. Продукты досоздаются из ингредиентов, не дублируя каталог и не воскрешая удалённое.
+{
+  const at = '2026-08-17T12:00:00.000Z'
+  const db = normalizeDatabase({
+    recipes: {
+      r1: {
+        name: 'Каша',
+        ingredients: [
+          { name: 'Овсяные хлопья', qty: 100, unit: 'г' },
+          { name: 'Молоко', qty: 500, unit: 'мл' },
+          { name: 'Соль', qty: null, unit: '' },
+        ],
+        createdAt: at,
+        updatedAt: at,
+      },
+    },
+    products: {
+      p1: { name: 'Молоко', group: 'Молочное и яйца', unit: 'мл', price: 0.1, createdAt: at, updatedAt: at },
+      p2: { name: 'Соль', group: 'Бакалея', unit: 'г', price: null, deletedAt: at, createdAt: at, updatedAt: at },
+    },
+  })
+  const filled = materializeIngredientProducts(db, at)
+  const names = Object.values(filled.products).filter((p) => !p.deletedAt).map((p) => p.name)
+  check('недостающий продукт досоздан из рецепта', names.includes('Овсяные хлопья'))
+  check('существующий продукт не задублирован', names.filter((n) => n === 'Молоко').length === 1)
+  check('удалённый продукт не воскрешён', !names.includes('Соль'))
+  check('повторный вызов ничего не меняет', materializeIngredientProducts(filled, at) === filled)
+}
+
+// 9. Дубли продуктов с двух устройств схлопываются, полезные поля выживают.
+{
+  const at = '2026-08-17T12:00:00.000Z'
+  const db = normalizeDatabase({
+    products: {
+      pa: { name: 'Соль', group: 'Прочее', unit: 'г', price: null, inStock: true, createdAt: at, updatedAt: at },
+      pb: { name: 'соль', group: 'Бакалея', unit: 'г', price: 0.03, createdAt: at, updatedAt: at },
+      pc: { name: 'Перец', group: 'Прочее', unit: 'г', price: null, createdAt: at, updatedAt: at },
+    },
+  })
+  const deduped = dedupeProducts(db, '2026-08-17T13:00:00.000Z')
+  const aliveOnes = Object.values(deduped.products).filter((p) => !p.deletedAt)
+  const salt = aliveOnes.filter((p) => p.name.toLowerCase() === 'соль')
+  check('дубль продукта схлопнут', salt.length === 1)
+  check('выжил продукт с ценой', salt[0]?.price === 0.03)
+  check('«есть дома» перенесено с дубля', salt[0]?.inStock === true)
+  check('продукт без дублей не тронут', aliveOnes.some((p) => p.name === 'Перец'))
+}
+
+// 10. Строки с диапазоном и запятой-пометкой (через полный normalizeDatabase не проверить —
 // это parseIngredientLine, он гоняется в check-ingredients).
 
 process.exit(failed === 0 ? 0 : 1)

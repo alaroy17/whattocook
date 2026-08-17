@@ -51,10 +51,8 @@ export function More() {
   const partnerName = USERS.find(
     (user) => user.id !== me && Boolean(db.settings.userEmails?.[user.id]),
   )?.name
-  const trashed = [db.recipes, db.entries, db.products, db.comments].reduce(
-    (sum, collection) => sum + Object.values(collection).filter((item) => item.deletedAt).length,
-    0,
-  )
+  // В корзине показываются только блюда — записи дня возвращает отмена в тосте.
+  const trashed = Object.values(db.recipes).filter((item) => item.deletedAt).length
 
   return (
     <>
@@ -133,7 +131,7 @@ export function More() {
             hint={
               trashed === 0
                 ? 'пусто'
-                : `${countOf(trashed, 'entry')} можно вернуть`
+                : `${countOf(trashed, 'dish')} можно вернуть`
             }
             onClick={() => navigate('/more/trash')}
           />

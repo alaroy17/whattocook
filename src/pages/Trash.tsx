@@ -1,73 +1,29 @@
 import { useMemo, useState } from 'react'
 import { TopBar } from '../components/TopBar'
-import { useStore, type Collection } from '../lib/store'
+import { useStore } from '../lib/store'
 import { Confirm, Empty, toast } from '../components/ui'
 import { IconRefresh, IconTrash } from '../components/Icons'
 import { formatDate } from '../lib/date'
-import {
-  MEAL_SLOTS,
-  TOMBSTONE_DAYS,
-  type Comment,
-  type Entry,
-  type Product,
-  type Recipe,
-  type Syncable,
-} from '../types'
+import { TOMBSTONE_DAYS, type Recipe } from '../types'
 import { countOf, daysWord } from '../lib/util'
 import { discardPhoto } from '../lib/photos'
 
-interface TrashItem {
-  collection: Collection
-  id: string
-  title: string
-  detail: string
-  deletedAt: string
-  /** Блюдо этой записи тоже в корзине — вернуть надо оба. */
-  orphanRecipeId?: string
-}
-
+/*
+ * В корзине — только блюда. Записи дня сюда не попадают: их возвращает отмена
+ * в тосте сразу после удаления, а потерянная запись пересоздаётся в два нажатия.
+ * Потерянный рецепт — с ингредиентами, шагами и фото — так просто не вернёшь.
+ */
 export function Trash() {
   const { db, restore, purge } = useStore()
   const [confirmPurge, setConfirmPurge] = useState(false)
 
-  const items = useMemo<TrashItem[]>(() => {
-    const result: TrashItem[] = []
-
-    const push = (
-      collection: Collection,
-      item: Syncable,
-      title: string,
-      detail: string,
-      orphanRecipeId?: string,
-    ) => {
-      if (!item.deletedAt) return
-      result.push({ collection, id: item.id, title, detail, deletedAt: item.deletedAt, orphanRecipeId })
-    }
-
-    for (const recipe of Object.values(db.recipes) as Recipe[]) {
-      push('recipes', recipe, recipe.name, `Блюдо · ${recipe.category}`)
-    }
-    for (const entry of Object.values(db.entries) as Entry[]) {
-      const recipe = entry.recipeId ? db.recipes[entry.recipeId] : undefined
-      const meal = MEAL_SLOTS.find((slot) => slot.id === entry.meal)?.name
-      push(
-        'entries',
-        entry,
-        recipe?.name ?? entry.title ?? 'Запись',
-        `Запись · ${formatDate(entry.date)} · ${meal}`,
-        recipe?.deletedAt ? recipe.id : undefined,
-      )
-    }
-    for (const product of Object.values(db.products) as Product[]) {
-      push('products', product, product.name, `Продукт · ${product.group}`)
-    }
-    for (const comment of Object.values(db.comments) as Comment[]) {
-      const recipe = db.recipes[comment.recipeId]?.name
-      push('comments', comment, comment.text.slice(0, 60), `Заметка${recipe ? ` · ${recipe}` : ''}`)
-    }
-
-    return result.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))
-  }, [db])
+  const items = useMemo<Recipe[]>(
+    () =>
+      (Object.values(db.recipes) as Recipe[])
+        .filter((recipe) => recipe.deletedAt)
+        .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')),
+    [db.recipes],
+  )
 
   const daysLeft = (deletedAt: string) => {
     const passed = Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000)
@@ -80,41 +36,31 @@ export function Trash() {
         title="Корзина"
         back
         showUser={false}
-        subtitle={
-          items.length === 0
-            ? 'пусто'
-            : countOf(items.length, 'entry')
-        }
+        subtitle={items.length === 0 ? 'пусто' : countOf(items.length, 'dish')}
       />
       <main className="content">
         {items.length === 0 ? (
           <Empty
             title="Корзина пуста"
-            text={`Удалённое хранится ${daysWord(TOMBSTONE_DAYS)} и всё это время его можно вернуть`}
+            text={`Удалённые блюда хранятся ${daysWord(TOMBSTONE_DAYS)}, и всё это время их можно вернуть`}
           />
         ) : (
           <>
             <div className="card-flat">
-              {items.map((item) => (
-                <div className="shop-item" key={`${item.collection}:${item.id}`} style={{ cursor: 'default' }}>
+              {items.map((recipe) => (
+                <div className="shop-item" key={recipe.id} style={{ cursor: 'default' }}>
                   <span className="grow shop-name">
-                    {item.title}
+                    {recipe.name}
                     <div className="small muted">
-                      {item.detail} · удалено {formatDate(item.deletedAt.slice(0, 10))} · останется{' '}
-                      {daysWord(daysLeft(item.deletedAt))}
+                      {recipe.category} · удалено {formatDate(recipe.deletedAt!.slice(0, 10))} · останется{' '}
+                      {daysWord(daysLeft(recipe.deletedAt!))}
                     </div>
                   </span>
                   <button
                     className="btn btn-sm"
                     onClick={() => {
-                      restore(item.collection, item.id)
-                      // Запись календаря без своего блюда показывалась бы как «Без названия».
-                      if (item.orphanRecipeId) restore('recipes', item.orphanRecipeId)
-                      toast(
-                        item.orphanRecipeId
-                          ? `«${item.title}» восстановлено вместе с блюдом`
-                          : `«${item.title}» восстановлено`,
-                      )
+                      restore('recipes', recipe.id)
+                      toast(`«${recipe.name}» восстановлено`)
                     }}
                   >
                     <IconRefresh size={15} /> Вернуть
@@ -135,7 +81,7 @@ export function Trash() {
       {confirmPurge && (
         <Confirm
           title="Очистить корзину?"
-          text="Записи исчезнут навсегда — и у вас, и у второго человека. Отменить это будет нельзя."
+          text="Удалённое исчезнет навсегда — и у вас, и у второго человека. Отменить это будет нельзя."
           confirmLabel="Очистить"
           onCancel={() => setConfirmPurge(false)}
           onConfirm={() => {

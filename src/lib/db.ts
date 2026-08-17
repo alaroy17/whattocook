@@ -6,10 +6,12 @@ import {
   USERS,
   type Database,
   type Entry,
+  type Product,
   type Recipe,
   type Syncable,
   type UserId,
 } from '../types'
+import { normalizeName, uid } from './util'
 
 const LOCAL_KEY = 'wtc.db.v1'
 
@@ -316,6 +318,90 @@ export function dedupeQuickEntries(db: Database, at: string): Database {
   }
 
   return changed ? { ...db, entries } : db
+}
+
+/**
+ * Продукт — единая сущность: он же ингредиент рецепта, он же строка списка покупок,
+ * он же галочка «есть дома». Ингредиенты хранятся текстом, поэтому недостающие
+ * продукты досоздаются отсюда: сохранили рецепт с мукой — «Мука» появилась
+ * в каталоге и в холодильнике сама, заводить её руками не нужно.
+ *
+ * Название с надгробием не воскрешается: удаление продукта — решение пользователя.
+ */
+export function materializeIngredientProducts(db: Database, at: string): Database {
+  const known = new Set<string>()
+  for (const product of Object.values(db.products)) known.add(normalizeName(product.name))
+
+  let changed = false
+  const products = { ...db.products }
+  for (const recipe of Object.values(db.recipes)) {
+    if (recipe.deletedAt) continue
+    for (const ingredient of recipe.ingredients) {
+      const name = ingredient.name.trim()
+      const key = normalizeName(name)
+      if (!key || known.has(key)) continue
+      known.add(key)
+      const id = uid('p')
+      products[id] = {
+        id,
+        name,
+        group: 'Прочее',
+        unit: ingredient.unit,
+        price: null,
+        inStock: false,
+        createdAt: at,
+        updatedAt: at,
+      }
+      changed = true
+    }
+  }
+  return changed ? { ...db, products } : db
+}
+
+/**
+ * Дубли продуктов с одним названием: появляются, когда два устройства одновременно
+ * досоздали продукт из рецептов. Выживает один — детерминированно (сначала с ценой,
+ * при равенстве меньший id), полезные поля (цена, «есть дома», отдел) переезжают
+ * на выжившего. Обе стороны приходят к одному результату независимо от порядка.
+ */
+export function dedupeProducts(db: Database, at: string): Database {
+  const groups = new Map<string, Product[]>()
+  for (const product of Object.values(db.products)) {
+    if (product.deletedAt) continue
+    const key = normalizeName(product.name)
+    if (!key) continue
+    const list = groups.get(key) ?? []
+    list.push(product)
+    groups.set(key, list)
+  }
+
+  let changed = false
+  const products = { ...db.products }
+  for (const list of groups.values()) {
+    if (list.length < 2) continue
+    const keep = [...list].sort((a, b) => {
+      if ((a.price != null) !== (b.price != null)) return a.price != null ? -1 : 1
+      return a.id.localeCompare(b.id)
+    })[0]
+    const merged: Product = { ...keep }
+    for (const extra of list) {
+      if (extra.id === keep.id) continue
+      if (extra.inStock && !merged.inStock) {
+        merged.inStock = true
+        merged.stockUpdatedAt = extra.stockUpdatedAt ?? merged.stockUpdatedAt
+      }
+      if (merged.price == null && extra.price != null) {
+        merged.price = extra.price
+        merged.packQty = extra.packQty
+        merged.packPrice = extra.packPrice
+      }
+      if (merged.group === 'Прочее' && extra.group !== 'Прочее') merged.group = extra.group
+      products[extra.id] = { ...extra, deletedAt: at, updatedAt: at }
+      changed = true
+    }
+    products[keep.id] = { ...merged, updatedAt: at }
+  }
+  return changed ? { ...db, products } : db
 }
 
 /**

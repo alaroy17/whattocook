@@ -13,8 +13,10 @@ import {
   USERS,
 } from '../types'
 import {
+  dedupeProducts,
   dedupeQuickEntries,
   loadLocal,
+  materializeIngredientProducts,
   mergeDatabases,
   normalizeDatabase,
   pruneTombstones,
@@ -94,7 +96,13 @@ function stamp<T extends Syncable>(existing: T | undefined, patch: Partial<T>, i
  */
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [db, setDb] = useState<Database>(() => loadLocal() ?? emptyDatabase())
+  const [db, setDb] = useState<Database>(() => {
+    const loaded = loadLocal() ?? emptyDatabase()
+    // Базы, собранные до единой сущности продуктов, догоняют: ингредиенты → каталог.
+    const withProducts = materializeIngredientProducts(loaded, nowIso())
+    if (withProducts !== loaded) saveLocal(withProducts)
+    return withProducts
+  })
   const [localMe, setLocalMe] = useState<UserId>(() => (localStorage.getItem(ME_KEY) as UserId) || 'andrei')
   const [connecting, setConnecting] = useState(false)
   const [sync, setSync] = useState<SyncState>(() => {
@@ -162,7 +170,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         for (let attempt = 0; attempt < 3; attempt++) {
           const remote = normalizeDatabase(await drive.downloadJson(file.id))
           // Локальную версию берём заново: пока шёл запрос, пользователь мог что-то поменять.
-          merged = pruneTombstones(dedupeQuickEntries(mergeDatabases(dbRef.current, remote), nowIso()))
+          const now = nowIso()
+          merged = pruneTombstones(
+            dedupeProducts(
+              materializeIngredientProducts(dedupeQuickEntries(mergeDatabases(dbRef.current, remote), now), now),
+              now,
+            ),
+          )
           const mergedText = serialize(merged)
           if (mergedText === serialize(remote)) break
 
@@ -432,6 +446,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         mutate((draft) => {
           saved = stamp<Recipe>(draft.recipes[id], patch as Partial<Recipe>, id)
           draft.recipes[id] = saved
+          // Новые ингредиенты сразу становятся продуктами — холодильник и цены не отстают.
+          draft.products = materializeIngredientProducts(draft, nowIso()).products
         })
         return saved
       },
