@@ -6,6 +6,7 @@ import {
   type Database,
   type Entry,
   type Product,
+  type PurgedAt,
   type Recipe,
   type Settings,
   type Syncable,
@@ -108,7 +109,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const loaded = loadLocal() ?? emptyDatabase()
     // Базы, собранные до единой сущности продуктов, догоняют: ингредиенты → каталог.
     // Заодно вычищается выдуманная сидом история приготовлений.
-    const prepared = materializeIngredientProducts(removeSeedArtifacts(loaded), nowIso())
+    /*
+     * dedupeProducts тоже здесь: он жил только в синхронизации, и без
+     * подключённого Диска два одинаковых продукта оставались навсегда.
+     */
+    const prepared = dedupeProducts(
+      materializeIngredientProducts(removeSeedArtifacts(loaded), nowIso()),
+      nowIso(),
+    )
     if (prepared !== loaded) saveLocal(prepared)
     return prepared
   })
@@ -186,6 +194,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           normalizeDatabase(JSON.parse(serialize(database)) as unknown)
         let merged = settle(pruneTombstones(dbRef.current))
         let baseline = file.version
+        let sent = false
         for (let attempt = 0; attempt < 3; attempt++) {
           const remote = normalizeDatabase(await drive.downloadJson(file.id))
           // Локальную версию берём заново: пока шёл запрос, пользователь мог что-то поменять.
@@ -202,7 +211,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ),
           )
           const mergedText = serialize(merged)
-          if (mergedText === serialize(remote)) break
+          if (mergedText === serialize(remote)) {
+            sent = true
+            break
+          }
 
           const current = await drive.getFileMeta(file.id)
           if (current.version !== baseline) {
@@ -210,8 +222,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             continue
           }
           await drive.uploadJson(file.id, mergedText)
+          sent = true
           break
         }
+        // Все три попытки перебил второй телефон — правки ещё не уехали.
+        if (!sent) schedulePushRef.current()
 
         /*
          * Правка могла прийти во время загрузки — тогда доотправим следующим заходом.
@@ -290,7 +305,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       for (const pending of queue) {
         try {
           const photoId = await uploadPendingPhoto(pending.id)
-          if (!photoId) continue
+          if (!photoId) {
+            /*
+             * Снимок не пережил чистку кэша браузера. Ссылку надо снять,
+             * иначе у обоих людей на месте фото навсегда остаётся заглушка.
+             */
+            mutate((draft) => {
+              for (const [id, recipe] of Object.entries(draft.recipes)) {
+                if (recipe.photoId === pending.id) {
+                  const { photoId: _dropped, ...rest } = recipe
+                  draft.recipes[id] = { ...rest, updatedAt: nowIso() }
+                }
+              }
+            })
+            continue
+          }
           mutate((draft) => {
             let attached = false
             for (const [id, recipe] of Object.entries(draft.recipes)) {
@@ -441,13 +470,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         drive.signOut()
         drive.forgetFile()
         localStorage.removeItem('wtc.google.email')
-        setSync((s) => ({ ...s, status: 'offline', email: null, message: '' }))
+        /*
+         * Отметку о прошлой синхронизации снимаем: по ней работали и фоновый
+         * синк, и тихое продление по первому касанию — нажав «Отключить»,
+         * человек тут же получал окно Google обратно.
+         */
+        localStorage.removeItem('wtc.lastSyncAt')
+        localStorage.removeItem('wtc.snapshot.lastDate')
+        setSync((s) => ({ ...s, status: 'offline', email: null, message: '', lastSyncAt: null }))
       },
       switchAccount: async () => {
         // Сначала выбор аккаунта: если человек закрыл окно — ничего не трогаем.
         await drive.switchAccount()
         drive.forgetFile()
         localStorage.removeItem('wtc.google.email')
+        // У нового аккаунта своя папка «История» — иначе копия за сегодня не создастся.
+        localStorage.removeItem('wtc.snapshot.lastDate')
         const info = await drive.fetchUserInfo().catch(() => null)
         if (info?.email) drive.saveEmail(info.email)
         setSync((s) => ({ ...s, email: info?.email ?? null }))
@@ -522,6 +560,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ;(draft[collection] as Record<string, Syncable>)[id] = restored
         })
       },
+      /*
+       * Очистка только двигает отметку и НЕ стирает надгробия локально:
+       * стёртое до отправки на Диск надгробие возвращалось живой записью
+       * со второго устройства. Физически записи выбрасывает слияние —
+       * там видно, что обе стороны считают их мёртвыми.
+       */
       purge: (collection) => {
         mutate((draft) => {
           const names: Collection[] = collection
@@ -532,36 +576,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
            * purgedAt = «сейчас» стирал бы и удаления, сделанные вторым телефоном
            * офлайн, которых очищавший никогда не видел, — блюдо воскресало у обоих.
            */
-          let latestSeen = ''
+          const purgedAt: PurgedAt = { ...draft.settings.purgedAt }
+          let changed = false
           for (const name of names) {
             const target = draft[name] as Record<string, Syncable>
+            let latestSeen = ''
             for (const [id, item] of Object.entries(target)) {
               if (!item.deletedAt) continue
               if (item.deletedAt > latestSeen) latestSeen = item.deletedAt
               /*
                * Записи дневника, ссылающиеся на стираемый рецепт, получают его имя
                * в title — иначе после очистки история показывала бы «Без названия».
+               * Время правки не трогаем: свежая правка второго человека важнее.
                */
               if (name === 'recipes') {
                 const recipeName = (item as Recipe).name
                 for (const [entryId, entry] of Object.entries(draft.entries)) {
-                  if (entry.recipeId === id && !entry.title && recipeName) {
-                    draft.entries[entryId] = { ...entry, title: recipeName, updatedAt: nowIso() }
+                  if (entry.recipeId === id && !entry.title && !entry.deletedAt && recipeName) {
+                    draft.entries[entryId] = { ...entry, title: recipeName }
                   }
                 }
               }
-              delete target[id]
             }
-          }
-          if (latestSeen) {
+            if (!latestSeen) continue
             // Спешащие часы одного устройства не должны запирать удаления в будущем.
             const now = nowIso()
             if (latestSeen > now) latestSeen = now
-            const current = draft.settings.purgedAt
-            draft.settings = {
-              ...draft.settings,
-              purgedAt: current && current > latestSeen ? current : latestSeen,
-            }
+            const current = purgedAt[name]
+            purgedAt[name] = current && current > latestSeen ? current : latestSeen
+            changed = true
+          }
+          if (changed) {
+            draft.settings = { ...draft.settings, purgedAt }
             draft.settingsUpdatedAt = nowIso()
           }
         })

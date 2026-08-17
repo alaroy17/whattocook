@@ -7,7 +7,9 @@ import {
   type Database,
   type Entry,
   type Product,
+  type PurgedAt,
   type Recipe,
+  type Settings,
   type Syncable,
   type UserId,
 } from '../types'
@@ -101,6 +103,24 @@ function sanitizeEntry(item: Record<string, unknown>): Partial<Entry> | null {
   }
 }
 
+/**
+ * Отметки очистки. Прежние базы хранили одну строку на всё сразу — переносим
+ * её на все виды записей: старая очистка и правда касалась всех.
+ */
+function purgedAtOf(value: unknown): PurgedAt {
+  if (typeof value === 'string' && value) {
+    return { recipes: value, entries: value, products: value, comments: value }
+  }
+  const result: PurgedAt = {}
+  if (value && typeof value === 'object') {
+    for (const kind of COLLECTIONS) {
+      const at = (value as Record<string, unknown>)[kind]
+      if (typeof at === 'string' && at) result[kind] = at
+    }
+  }
+  return result
+}
+
 function sanitizeProduct(item: Record<string, unknown>): Record<string, unknown> | null {
   const name = str(item.name).trim()
   if (!name) return null
@@ -159,7 +179,23 @@ export function normalizeDatabase(input: unknown): Database {
       } as Syncable
     }
   }
-  db.settings = { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) }
+  /*
+   * Вложенное копируем явно: без этого настройки по умолчанию оставались
+   * общим объектом, и разбор одной базы дописывал отметки в константу,
+   * из которой их получали все следующие.
+   */
+  const rawSettings = (raw.settings ?? {}) as Partial<Settings> & { purgedAt?: unknown }
+  db.settings = {
+    ...DEFAULT_SETTINGS,
+    ...rawSettings,
+    userEmails: { ...(rawSettings.userEmails ?? {}) },
+    userEmailsAt: { ...(rawSettings.userEmailsAt ?? {}) },
+    sharedWith: [...(rawSettings.sharedWith ?? [])],
+    categories: Array.isArray(rawSettings.categories)
+      ? [...rawSettings.categories]
+      : [...DEFAULT_SETTINGS.categories],
+    purgedAt: purgedAtOf(rawSettings.purgedAt),
+  }
   db.settingsUpdatedAt = str(raw.settingsUpdatedAt) || new Date(0).toISOString()
 
   /*
@@ -202,9 +238,14 @@ export function normalizeDatabase(input: unknown): Database {
  */
 export function mergeDatabases(a: Database, b: Database): Database {
   const result = emptyDatabase()
-  // Водяной знак очистки нужен уже при слиянии записей — считаем заранее.
-  const purged = maxIso(a.settings.purgedAt, b.settings.purgedAt)
+  // Водяные знаки очистки нужны уже при слиянии записей — считаем заранее.
+  const purgedAt: PurgedAt = {}
+  for (const kind of COLLECTIONS) {
+    const at = maxIso(a.settings.purgedAt?.[kind], b.settings.purgedAt?.[kind])
+    if (at) purgedAt[kind] = at
+  }
   for (const name of COLLECTIONS) {
+    const purged = purgedAt[name] ?? null
     const target = result[name] as Record<string, Syncable>
     const left = a[name] as Record<string, Syncable>
     const right = b[name] as Record<string, Syncable>
@@ -232,7 +273,14 @@ export function mergeDatabases(a: Database, b: Database): Database {
       target[id] = winner
     }
   }
-  const settingsFromB = b.settingsUpdatedAt > a.settingsUpdatedAt
+  /*
+   * Ничья по времени настроек разрешается содержимым — иначе каждая сторона
+   * оставляла свою версию, и устройства бесконечно перезаливали файл.
+   */
+  const settingsFromB =
+    b.settingsUpdatedAt === a.settingsUpdatedAt
+      ? JSON.stringify(sortKeys(b.settings)) < JSON.stringify(sortKeys(a.settings))
+      : b.settingsUpdatedAt > a.settingsUpdatedAt
   result.settings = { ...DEFAULT_SETTINGS, ...(settingsFromB ? b.settings : a.settings) }
   result.settingsUpdatedAt = settingsFromB ? b.settingsUpdatedAt : a.settingsUpdatedAt
 
@@ -249,7 +297,7 @@ export function mergeDatabases(a: Database, b: Database): Database {
   result.settings.sharedWith = [
     ...new Set([...(a.settings.sharedWith ?? []), ...(b.settings.sharedWith ?? [])]),
   ].sort()
-  result.settings.purgedAt = maxIso(a.settings.purgedAt, b.settings.purgedAt)
+  result.settings.purgedAt = purgedAt
 
   return result
 }
@@ -291,6 +339,11 @@ function maxIso(a: string | null | undefined, b: string | null | undefined): str
   if (!a) return b ?? null
   if (!b) return a
   return a > b ? a : b
+}
+
+/** Скрыта ли запись очисткой корзины: показывать её больше не нужно. */
+export function isPurged(item: Syncable, purgedAt: string | undefined): boolean {
+  return Boolean(item.deletedAt && purgedAt && item.deletedAt <= purgedAt)
 }
 
 /** Живые (не удалённые) записи коллекции. */
@@ -452,13 +505,26 @@ export function dedupeProducts(db: Database, at: string): Database {
  */
 export function pruneTombstones(db: Database, olderThanDays = TOMBSTONE_DAYS): Database {
   const expired = new Date(Date.now() - olderThanDays * 86400000).toISOString()
+  /*
+   * Имена продуктов, которые ещё нужны живым рецептам. Их надгробия держим
+   * дольше срока: без надгробия материализация ингредиентов создала бы
+   * удалённый продукт заново — решение пользователя отменилось бы само.
+   */
+  const neededNames = new Set<string>()
+  for (const recipe of Object.values(db.recipes)) {
+    if (recipe.deletedAt) continue
+    for (const ingredient of recipe.ingredients) neededNames.add(normalizeName(ingredient.name))
+  }
+
   const result: Database = { ...db }
   for (const name of COLLECTIONS) {
     const source = db[name] as Record<string, Syncable>
     const kept: Record<string, Syncable> = {}
     let removed = 0
     for (const [id, item] of Object.entries(source)) {
-      if (item.deletedAt && item.deletedAt < expired) removed++
+      const keepAsBlocker =
+        name === 'products' && neededNames.has(normalizeName((item as Product).name))
+      if (item.deletedAt && item.deletedAt < expired && !keepAsBlocker) removed++
       else kept[id] = item
     }
     if (removed > 0) (result[name] as Record<string, Syncable>) = kept

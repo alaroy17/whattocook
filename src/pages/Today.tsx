@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
@@ -48,10 +48,22 @@ export function Today() {
   const categories = useMemo(() => categoriesWithRecipes(db), [db])
   const regulars = useMemo(() => regularRecipes(db, date), [db, date])
 
-  const random = useMemo(() => {
-    void seed
-    return pickRandom(suggestions)
-  }, [suggestions, seed])
+  /*
+   * Случайное блюдо держим по id: раньше оно пересчитывалось от всей базы,
+   * и любая правка или фоновая синхронизация подменяли карточку под рукой —
+   * нажимаешь «Готовим сегодня», а в списке уже другое блюдо.
+   */
+  const [randomId, setRandomId] = useState<string | null>(null)
+  const random = useMemo(
+    () => suggestions.find((item) => item.recipe.id === randomId) ?? null,
+    [suggestions, randomId],
+  )
+
+  // Новое блюдо выпадает по нажатию кнопки и когда прежнее пропало из списка.
+  useEffect(() => {
+    if (mode !== 'random' || random) return
+    setRandomId(pickRandom(suggestions)?.recipe.id ?? null)
+  }, [mode, random, suggestions])
 
   const fresh = suggestions.filter((item) => !item.tooRecent)
   const recent = suggestions.filter((item) => item.tooRecent)
@@ -148,7 +160,12 @@ export function Today() {
             <h2>Что приготовить</h2>
             <Segmented
               value={mode}
-              onChange={setMode}
+              onChange={(value) => {
+                // Со сменой режима и раздела счётчик листания сбрасываем:
+                // иначе «Подсказка» открывалась на четвёртом по счёту блюде.
+                setSeed(0)
+                setMode(value)
+              }}
               options={[
                 { id: 'smart', label: 'Подсказка' },
                 { id: 'random', label: 'Случайно' },
@@ -160,7 +177,10 @@ export function Today() {
             <div style={{ marginBottom: 10 }}>
               <Chips
                 value={category}
-                onChange={setCategory}
+                onChange={(value) => {
+                  setSeed(0)
+                  setCategory(value)
+                }}
                 options={[{ id: 'all', label: 'Все' }, ...categories.map((item) => ({ id: item, label: item }))]}
               />
             </div>
@@ -200,9 +220,19 @@ export function Today() {
                 <button className="btn" onClick={() => setLogging({ recipeId: hero.recipe.id, status: 'planned' })}>
                   В план
                 </button>
-                <button className="icon-btn" onClick={() => setSeed((value) => value + 1)} aria-label="Другое блюдо">
-                  {mode === 'random' ? <IconDice /> : <IconRefresh />}
-                </button>
+                {/* Листать нечего, когда подсказка одна — кнопка выглядела бы сломанной */}
+                {(mode === 'random' || fresh.length > 1) && (
+                  <button
+                    className="icon-btn"
+                    onClick={() => {
+                      setSeed((value) => value + 1)
+                      if (mode === 'random') setRandomId(null)
+                    }}
+                    aria-label="Другое блюдо"
+                  >
+                    {mode === 'random' ? <IconDice /> : <IconRefresh />}
+                  </button>
+                )}
               </div>
             </div>
           ) : totalRecipes === 0 ? (

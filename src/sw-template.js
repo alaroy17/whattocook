@@ -8,9 +8,24 @@ self.addEventListener('install', (event) => {
   // чтобы не менять код под работающим приложением. cache: 'reload' — мимо HTTP-кэша,
   // иначе в прекэш мог попасть залежавшийся index.html и «Обновить» давало старую оболочку.
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE.map((url) => new Request(url, { cache: 'reload' })))),
+    caches.open(CACHE).then((cache) =>
+      /*
+       * По одному файлу: cache.addAll атомарен, и единственный недокачанный
+       * ассет отменял установку целиком — офлайн-режим молча не включался.
+       * Оболочка обязательна, остальное — как получится.
+       */
+      Promise.all(
+        PRECACHE.map((url) =>
+          fetch(new Request(url, { cache: 'reload' }))
+            .then((response) => (response.ok ? cache.put(url, response) : null))
+            .catch(() => null),
+        ),
+      ).then(() =>
+        caches.match(BASE).then((hit) => {
+          if (!hit) throw new Error('Не удалось сохранить оболочку приложения')
+        }),
+      ),
+    ),
   )
 })
 

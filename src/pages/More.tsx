@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
-import { alive } from '../lib/db'
+import { alive, isPurged } from '../lib/db'
 import {
   IconChart,
   IconChevronRight,
@@ -45,14 +45,19 @@ export function More() {
   const [confirmSwap, setConfirmSwap] = useState(false)
   const partner = USERS.find((user) => user.id !== me)
 
-  const entries = alive(db.entries).filter((entry) => entry.status === 'done').length
+  // Как в статистике: «доедаем» отдельной готовкой не считается.
+  const entries = alive(db.entries).filter(
+    (entry) => entry.status === 'done' && !entry.leftovers,
+  ).length
   const products = alive(db.products).length
   // Второй привязанный человек — именно второй, а не всегда «Саша».
   const partnerName = USERS.find(
     (user) => user.id !== me && Boolean(db.settings.userEmails?.[user.id]),
   )?.name
   // В корзине показываются только блюда — записи дня возвращает отмена в тосте.
-  const trashed = Object.values(db.recipes).filter((item) => item.deletedAt).length
+  const trashed = Object.values(db.recipes).filter(
+    (item) => item.deletedAt && !isPurged(item, db.settings.purgedAt?.recipes),
+  ).length
 
   return (
     <>

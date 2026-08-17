@@ -157,8 +157,9 @@ export async function uploadRecipePhoto(
 
 /** Удаляет фотографию с Диска и из кэша. Ошибки игнорируем: файла могло уже не быть. */
 export async function discardPhoto(photoId: string): Promise<void> {
+  // В корзину Диска, а не насовсем: ошибочно заменённое фото можно вернуть руками.
   if (isPendingPhoto(photoId)) removePending(photoId)
-  else await drive.deleteFile(photoId).catch(() => {})
+  else await drive.trashFile(photoId).catch(() => {})
   await deleteCacheEntry(photoId)
 }
 

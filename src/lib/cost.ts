@@ -16,6 +16,11 @@ const BASE: Record<string, { base: string; factor: number }> = {
   'мл': { base: 'мл', factor: 1 },
   'л': { base: 'мл', factor: 1000 },
   'шт': { base: 'шт', factor: 1 },
+  // Ложки и стаканы — приблизительно, но лучше, чем «цена неизвестна»
+  // у масла, купленного литрами и записанного в рецепте ложками.
+  'ст.л.': { base: 'мл', factor: 15 },
+  'ч.л.': { base: 'мл', factor: 5 },
+  'стак.': { base: 'мл', factor: 200 },
 }
 
 function toBase(qty: number, unit: string): { qty: number; base: string } | null {
@@ -82,9 +87,13 @@ function roundQty(value: number): number {
   return fine > 0 ? fine : value
 }
 
-/** Доля ингредиентов, которые уже есть дома. */
+/**
+ * Доля ингредиентов, которые уже есть дома. Про блюдо без ингредиентов
+ * ничего не известно — 0.5, иначе оно получало бонус «всё дома» ни за что
+ * и обгоняло блюда, продукты для которых правда лежат в холодильнике.
+ */
 export function stockRatio(recipe: Recipe, index: ProductIndex): number {
-  if (recipe.ingredients.length === 0) return 1
+  if (recipe.ingredients.length === 0) return 0.5
   let inStock = 0
   for (const ingredient of recipe.ingredients) {
     const product = index.get(normalizeName(ingredient.name))

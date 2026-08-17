@@ -20,6 +20,10 @@ const COMPATIBLE: Record<string, { base: string; factor: number }> = {
   'кг': { base: 'г', factor: 1000 },
   'мл': { base: 'мл', factor: 1 },
   'л': { base: 'мл', factor: 1000 },
+  // Иначе одно и то же масло из двух рецептов давало две строки в списке.
+  'ст.л.': { base: 'мл', factor: 15 },
+  'ч.л.': { base: 'мл', factor: 5 },
+  'стак.': { base: 'мл', factor: 200 },
 }
 
 /** «1200 г» читается хуже, чем «1,2 кг». */

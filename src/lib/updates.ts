@@ -27,6 +27,10 @@ function announce(worker: ServiceWorker | null) {
 }
 
 /** Переключиться на скачанную версию: сообщаем воркеру и перезагружаем страницу. */
+/*
+ * Если воркер успел активироваться сам, события controllerchange не будет —
+ * страница осталась бы с висящей плашкой. Поэтому есть запасная перезагрузка.
+ */
 export function applyUpdate(): void {
   if (!waitingWorker) {
     window.location.reload()
@@ -34,6 +38,13 @@ export function applyUpdate(): void {
   }
   userRequestedUpdate = true
   waitingWorker.postMessage({ type: 'SKIP_WAITING' })
+  // Запасной вариант: событие не пришло — перезагружаемся сами.
+  setTimeout(() => {
+    if (!reloading) {
+      reloading = true
+      window.location.reload()
+    }
+  }, 2500)
 }
 
 export function registerServiceWorker(url: string): void {

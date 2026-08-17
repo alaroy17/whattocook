@@ -223,11 +223,18 @@ export interface Settings {
   /** Кому уже открыли доступ к папке на Диске — чтобы не гадать, ушло приглашение или нет. */
   sharedWith: string[]
   /**
-   * Момент последней очистки корзины. Всё, что удалили до него, стирается
-   * окончательно — и на втором устройстве тоже.
+   * Момент последней очистки корзины по каждому виду записей. Всё, что удалили
+   * до него, стирается окончательно — и на втором устройстве тоже.
+   *
+   * По видам, а не одной отметкой: корзина показывает только блюда, а общая
+   * отметка выбрасывала заодно надгробия продуктов — и удалённый продукт
+   * тут же появлялся снова из ингредиентов рецепта.
    */
-  purgedAt: string | null
+  purgedAt: PurgedAt
 }
+
+export type PurgedKind = 'recipes' | 'entries' | 'products' | 'comments'
+export type PurgedAt = Partial<Record<PurgedKind, string>>
 
 /** Сколько дней удалённое лежит в корзине, прежде чем исчезнуть навсегда. */
 export const TOMBSTONE_DAYS = 120
@@ -243,7 +250,7 @@ export const DEFAULT_SETTINGS: Settings = {
   userEmails: {},
   userEmailsAt: {},
   sharedWith: [],
-  purgedAt: null,
+  purgedAt: {},
 }
 
 export interface Database {

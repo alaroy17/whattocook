@@ -7,6 +7,15 @@ import { StoreProvider } from './lib/store'
 import { registerServiceWorker } from './lib/updates'
 import './styles.css'
 
+/*
+ * Страницу нельзя показывать в чужом фрейме: заголовок frame-ancestors на
+ * GitHub Pages не выставить, а в приложении есть необратимые кнопки —
+ * «Отключить», «Очистить всё», «Пригласить».
+ */
+if (window.top !== window.self) {
+  window.top!.location.href = window.self.location.href
+}
+
 /**
  * Последний рубеж: если что-то всё-таки упало на рендере, человек видит
  * не белый экран без выхода, а объяснение и две кнопки. Особенно важно

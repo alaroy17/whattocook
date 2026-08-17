@@ -51,7 +51,12 @@ declare global {
 const FOLDER_MIME = 'application/vnd.google-apps.folder'
 
 export class DriveError extends Error {
-  constructor(message: string, readonly needsInteraction = false) {
+  constructor(
+    message: string,
+    readonly needsInteraction = false,
+    /** HTTP-код ответа Диска, если ошибка пришла от него. */
+    readonly status?: number,
+  ) {
     super(message)
   }
 }
@@ -230,7 +235,13 @@ async function ensureTokenClient(): Promise<TokenClient> {
 export async function getAccessToken(_interactive: boolean, promptMode: '' | 'select_account' = ''): Promise<string> {
   if (promptMode === '' && hasToken()) return accessToken
   const client = await ensureTokenClient()
-  if (inFlight) return inFlight
+  /*
+   * Разделять запрос можно только с таким же тихим: иначе «Сменить аккаунт»,
+   * нажатое во время фоновой синхронизации, возвращало её токен — окно выбора
+   * даже не открывалось, а человек оставался в прежнем аккаунте.
+   */
+  if (inFlight && promptMode === '') return inFlight
+  if (inFlight) await inFlight.catch(() => undefined)
 
   inFlight = new Promise<string>((resolve, reject) => {
     pending = { resolve, reject }
@@ -253,12 +264,22 @@ export async function getAccessToken(_interactive: boolean, promptMode: '' | 'se
   }
 }
 
-/** Явная смена аккаунта — единственное место, где нужен выбор из списка. */
-export function switchAccount(): Promise<string> {
+/**
+ * Явная смена аккаунта — единственное место, где нужен выбор из списка.
+ * Прежний токен гасим только после успешного получения нового: раньше
+ * закрытое окно выбора оставляло человека разлогиненным на ровном месте.
+ */
+export async function switchAccount(): Promise<string> {
+  const previous = { token: accessToken, until: expiresAt }
   accessToken = ''
   expiresAt = 0
-  writeTokenCookie(null, 0)
-  return getAccessToken(true, 'select_account')
+  try {
+    return await getAccessToken(true, 'select_account')
+  } catch (error) {
+    accessToken = previous.token
+    expiresAt = previous.until
+    throw error
+  }
 }
 
 export function signOut(): void {
@@ -283,7 +304,16 @@ async function api(path: string, init: RequestInit = {}, retry = true): Promise<
   }
   if (!response.ok) {
     const text = await response.text().catch(() => '')
-    throw new DriveError(`Google Drive ответил ${response.status}: ${text.slice(0, 200)}`)
+    /*
+     * Повторный 401 означает, что доступ отозван на стороне Google, — это не
+     * «ошибка Диска», а «нужно войти заново»: иначе экран показывал красным
+     * технический текст ответа вместо кнопки входа.
+     */
+    throw new DriveError(
+      `Google Drive ответил ${response.status}: ${text.slice(0, 200)}`,
+      response.status === 401,
+      response.status,
+    )
   }
   return response
 }
@@ -305,6 +335,8 @@ export interface DriveFileMeta {
   version?: string
   /** false — файл чужой, им с нами поделились. */
   ownedByMe?: boolean
+  /** Файл лежит в корзине Диска — работать с ним нельзя. */
+  trashed?: boolean
 }
 
 /** Базы нет ни своей, ни расшаренной — приложение должно спросить, что делать. */
@@ -312,6 +344,15 @@ export class NoDatabaseError extends DriveError {
   constructor() {
     super('База не найдена')
   }
+}
+
+/** Удаление в корзину Диска: безвозвратный DELETE не оставлял шанса на ошибку. */
+export async function trashFile(fileId: string): Promise<void> {
+  await api(`/drive/v3/files/${encodeURIComponent(fileId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  })
 }
 
 async function findAllByAppTag(kind: string, mimeType?: string): Promise<DriveFileMeta[]> {
@@ -354,7 +395,7 @@ async function findShared(kind: string, mimeType?: string): Promise<DriveFileMet
 
 export async function getFileMeta(fileId: string): Promise<DriveFileMeta> {
   const response = await api(
-    `/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,modifiedTime,version`,
+    `/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,modifiedTime,version,ownedByMe,trashed`,
   )
   return (await response.json()) as DriveFileMeta
 }
@@ -399,16 +440,30 @@ export async function resolveAppFolder(): Promise<string> {
 export async function resolveDbFile(): Promise<DriveFileMeta> {
   const saved = getSavedFileId()
   if (saved) {
+    let meta: DriveFileMeta | null = null
     try {
-      return await getFileMeta(saved)
-    } catch {
+      meta = await getFileMeta(saved)
+    } catch (error) {
+      /*
+       * Кэш сбрасываем только когда файла правда нет или к нему нет доступа.
+       * Раньше сюда попадал и обрыв сети — и приложение уходило искать базу
+       * заново, рискуя подцепить не тот файл.
+       */
+      const status = error instanceof DriveError ? error.status : undefined
+      if (status !== 404 && status !== 403) throw error
       forgetFile()
     }
+    // Файл в корзине Диска остаётся доступным по id: без этой проверки
+    // приложение продолжало бы писать в удалённый файл до его очистки.
+    if (meta && !meta.trashed) return meta
+    if (meta) forgetFile()
   }
-  const found =
-    (await findByAppTag('db')) ??
-    (await findShared('db'))[0] ??
-    (await findByName(DB_FILE_NAME))
+  /*
+   * Поиск по имени — только среди своих файлов. Без этого достаточно было
+   * расшарить человеку любой what-to-cook.json, чтобы приложение приняло его
+   * за общую базу и залило туда весь дневник.
+   */
+  const found = (await findByAppTag('db')) ?? (await findShared('db'))[0] ?? (await findOwnByName(DB_FILE_NAME))
   if (found) {
     setSavedFileId(found.id)
     return found
@@ -423,19 +478,24 @@ export async function createDbFile(initialContent: string): Promise<DriveFileMet
   return created
 }
 
-async function findByName(name: string, mimeType?: string): Promise<DriveFileMeta | null> {
-  const clauses = [`name='${name}'`, 'trashed=false']
+/**
+ * Поиск по имени — запасной путь для файлов, созданных до появления пометок
+ * приложения. Ищем строго среди СВОИХ файлов: чужой файл с таким же именем,
+ * которым с нами «поделились», приложение принимало за общую базу.
+ */
+async function findOwnByName(name: string, mimeType?: string): Promise<DriveFileMeta | null> {
+  const clauses = [`name='${name}'`, "'me' in owners", 'trashed=false']
   if (mimeType) clauses.push(`mimeType='${mimeType}'`)
   const query = encodeURIComponent(clauses.join(' and '))
   const response = await api(
-    `/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,version)&orderBy=modifiedTime desc&pageSize=10`,
+    `/drive/v3/files?q=${query}&fields=files(id,name,modifiedTime,version,ownedByMe)&orderBy=modifiedTime desc&pageSize=10`,
   )
   const data = (await response.json()) as { files?: DriveFileMeta[] }
-  return data.files?.[0] ?? null
+  return data.files?.find((file) => file.ownedByMe !== false) ?? null
 }
 
 function findFolderByName(name: string): Promise<DriveFileMeta | null> {
-  return findByName(name, FOLDER_MIME)
+  return findOwnByName(name, FOLDER_MIME)
 }
 
 function multipartBody(metadata: object, contentType: string, body: Blob | string) {

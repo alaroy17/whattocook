@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
-import { PRODUCT_GROUPS, type Product } from '../types'
+import { PRODUCT_GROUPS, type Database, type Product } from '../types'
 import { Empty, Field, Sheet } from '../components/ui'
 import { IconPlus, IconTag } from '../components/Icons'
 import { agoWord, countOf, normalizeName, nowIso } from '../lib/util'
 import { fridgeStaleDays } from '../lib/fridge'
 
 export function Fridge() {
-  const { db, saveProduct, updateSettings } = useStore()
+  const { db, saveProduct } = useStore()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
@@ -57,11 +57,13 @@ export function Fridge() {
 
   /*
    * Любая отметка означает, что список сейчас актуален, — отдельная кнопка
-   * «Всё проверено» только вызывала вопрос, что она вообще делает.
+   * «Всё проверено» только вызывала вопрос, что она вообще делает. Дату
+   * проверки писать в настройки не нужно: свежесть и так считается по
+   * stockUpdatedAt продуктов, а настройки сливаются целиком по времени —
+   * одна галочка откатывала бы тему или разделы, изменённые вторым телефоном.
    */
   const setStock = (product: Product, inStock: boolean) => {
     saveProduct({ id: product.id, inStock, stockUpdatedAt: nowIso() })
-    updateSettings({ fridgeReviewedAt: nowIso() })
   }
 
   return (
@@ -184,9 +186,20 @@ export function Fridge() {
   )
 }
 
+/** В какой единице этот продукт встречается в рецептах — чтобы цена потом сошлась. */
+function unitFromRecipes(db: Database, name: string): string | undefined {
+  const key = normalizeName(name)
+  for (const recipe of alive(db.recipes)) {
+    for (const ingredient of recipe.ingredients) {
+      if (normalizeName(ingredient.name) === key && ingredient.unit) return ingredient.unit
+    }
+  }
+  return undefined
+}
+
 /** Быстрое добавление продукта прямо из холодильника — без цены, её можно вписать позже. */
 function QuickProduct({ name, onClose }: { name: string; onClose: () => void }) {
-  const { saveProduct } = useStore()
+  const { db, saveProduct } = useStore()
   const [value, setValue] = useState(name)
   const [group, setGroup] = useState<string>('Прочее')
 
@@ -211,10 +224,24 @@ function QuickProduct({ name, onClose }: { name: string; onClose: () => void }) 
             className="btn btn-primary grow"
             disabled={!value.trim()}
             onClick={() => {
+              /*
+               * Имя могли поправить прямо в форме — проверяем ещё раз, иначе
+               * появлялся второй «Молоко», а схлопывать дубли некому:
+               * без подключённого Диска синхронизация не запускается.
+               */
+              const existing = alive(db.products).find(
+                (product) => normalizeName(product.name) === normalizeName(value),
+              )
+              if (existing) {
+                saveProduct({ id: existing.id, inStock: true, stockUpdatedAt: nowIso() })
+                onClose()
+                return
+              }
               saveProduct({
                 name: value.trim(),
                 group,
-                unit: 'шт',
+                // Единицу берём из рецептов: «шт» для муки навсегда рвала связь с ценой.
+                unit: unitFromRecipes(db, value) ?? 'шт',
                 price: null,
                 inStock: true,
                 stockUpdatedAt: nowIso(),

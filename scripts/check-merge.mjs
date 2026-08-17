@@ -20,23 +20,69 @@ const check = (name, condition) => {
 const base = () => normalizeDatabase({})
 const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, updatedAt, ...extra })
 
-// 1. Очищенная корзина не возвращается при слиянии с устройством, где запись ещё есть.
+// 1. Очищенное надгробие выбрасывается, когда обе стороны считают запись мёртвой.
 {
   const cleaned = base()
-  cleaned.settings.purgedAt = '2026-08-16T10:00:00.000Z'
+  cleaned.settings.purgedAt = { recipes: '2026-08-16T10:00:00.000Z' }
   cleaned.settingsUpdatedAt = '2026-08-16T10:00:00.000Z'
+  cleaned.recipes.r1 = stamp('r1', '2026-08-15T09:00:00.000Z', {
+    name: 'Плов',
+    deletedAt: '2026-08-15T09:00:00.000Z',
+  })
 
   const other = base()
-  other.recipes.r1 = stamp('r1', '2026-08-15T09:00:00.000Z', { deletedAt: '2026-08-15T09:00:00.000Z' })
+  other.recipes.r1 = stamp('r1', '2026-08-15T09:00:00.000Z', {
+    name: 'Плов',
+    deletedAt: '2026-08-15T09:00:00.000Z',
+  })
 
   const merged = pruneTombstones(mergeDatabases(cleaned, other))
   check('очищенное надгробие не воскресает', merged.recipes.r1 === undefined)
 }
 
+// 1б. Пока вторая сторона держит запись живой, надгробие обязано выжить.
+{
+  const cleaned = base()
+  cleaned.settings.purgedAt = { recipes: '2026-08-16T10:00:00.000Z' }
+  cleaned.settingsUpdatedAt = '2026-08-16T10:00:00.000Z'
+  cleaned.recipes.r5 = stamp('r5', '2026-08-15T09:00:00.000Z', {
+    name: 'Борщ',
+    deletedAt: '2026-08-15T09:00:00.000Z',
+  })
+
+  const alive = base()
+  alive.recipes.r5 = stamp('r5', '2026-08-10T09:00:00.000Z', { name: 'Борщ' })
+
+  const m1 = pruneTombstones(mergeDatabases(cleaned, alive))
+  const m2 = pruneTombstones(mergeDatabases(alive, cleaned))
+  check('удаление доезжает, а не отменяется очисткой', m1.recipes.r5?.deletedAt !== undefined)
+  check('и не зависит от порядка сторон', m2.recipes.r5?.deletedAt !== undefined)
+}
+
+// 1в. Очистка блюд не трогает надгробия продуктов — иначе удалённый продукт
+// пересоздаётся материализацией из ингредиентов.
+{
+  const cleaned = base()
+  cleaned.settings.purgedAt = { recipes: '2026-08-16T10:00:00.000Z' }
+  cleaned.settingsUpdatedAt = '2026-08-16T10:00:00.000Z'
+  cleaned.products.p1 = stamp('p1', '2026-08-01T09:00:00.000Z', {
+    name: 'Мука',
+    deletedAt: '2026-08-01T09:00:00.000Z',
+  })
+  const other = base()
+  other.products.p1 = stamp('p1', '2026-08-01T09:00:00.000Z', {
+    name: 'Мука',
+    deletedAt: '2026-08-01T09:00:00.000Z',
+  })
+
+  const merged = mergeDatabases(cleaned, other)
+  check('надгробие продукта пережило очистку блюд', merged.products.p1?.deletedAt !== undefined)
+}
+
 // 2. Удаление, сделанное ПОСЛЕ очистки, доживает до второго устройства.
 {
   const cleaned = base()
-  cleaned.settings.purgedAt = '2026-08-16T10:00:00.000Z'
+  cleaned.settings.purgedAt = { recipes: '2026-08-16T10:00:00.000Z' }
   cleaned.settingsUpdatedAt = '2026-08-16T10:00:00.000Z'
 
   const other = base()
@@ -44,6 +90,19 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
 
   const merged = pruneTombstones(mergeDatabases(cleaned, other))
   check('свежее удаление сохраняется', merged.recipes.r2?.deletedAt !== undefined)
+}
+
+// 2б. Старая база с одной отметкой очистки переносится на все виды записей.
+{
+  const migrated = normalizeDatabase({
+    settings: { purgedAt: '2026-08-16T10:00:00.000Z' },
+    settingsUpdatedAt: '2026-08-16T10:00:00.000Z',
+  })
+  check(
+    'старая отметка очистки перенесена',
+    migrated.settings.purgedAt?.recipes === '2026-08-16T10:00:00.000Z' &&
+      migrated.settings.purgedAt?.products === '2026-08-16T10:00:00.000Z',
+  )
 }
 
 // 3. Привязка почт не теряется, когда второй правил другие настройки позже.
@@ -191,7 +250,10 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   check('ингредиенты на месте', db.recipes.r1?.ingredients?.[0]?.qty === 100)
   check('история на месте', db.entries.e1?.recipeId === 'r1')
   check('старые настройки сохранены', db.settings.cooldownDays === 10 && db.settings.currency === '₽')
-  check('новые настройки получили значения', db.settings.purgedAt === null && Array.isArray(db.settings.sharedWith))
+  check(
+    'новые настройки получили значения',
+    typeof db.settings.purgedAt === 'object' && Array.isArray(db.settings.sharedWith),
+  )
   check('раздел «Закуска» не пропал из фильтров', db.settings.categories.includes('Закуска'))
 
   // И самое опасное: чистка надгробий не должна ничего удалить у старой базы.
@@ -307,6 +369,15 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   check(
     'список доступа сходится по порядку',
     serialize(mergeDatabases(s1, s2)) === serialize(mergeDatabases(s2, s1)),
+  )
+  // Ничья по времени настроек тоже должна решаться одинаково с обеих сторон.
+  const c1 = base()
+  c1.settings.categories = ['Завтрак', 'Суп']
+  const c2 = base()
+  c2.settings.categories = ['Суп', 'Завтрак']
+  check(
+    'настройки при ничьей сходятся',
+    serialize(mergeDatabases(c1, c2).settings) === serialize(mergeDatabases(c2, c1).settings),
   )
 }
 

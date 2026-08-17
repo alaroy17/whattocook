@@ -1,6 +1,6 @@
 import type { Database } from '../types'
 import { alive } from './db'
-import { diffDays, today } from './date'
+import { diffDays, toIsoDate, today } from './date'
 
 /** Когда список продуктов дома трогали в последний раз. */
 export function fridgeUpdatedAt(db: Database): string | null {
@@ -16,7 +16,9 @@ export function fridgeUpdatedAt(db: Database): string | null {
 export function fridgeStaleDays(db: Database): number | null {
   const at = fridgeUpdatedAt(db)
   if (!at) return null
-  return Math.max(0, diffDays(at.slice(0, 10), today()))
+  // Отметка хранится в UTC, а «сегодня» — местное: без перевода ночная отметка
+  // сразу показывалась как «обновляли вчера».
+  return Math.max(0, diffDays(toIsoDate(new Date(at)), today()))
 }
 
 /** Пора ли напомнить, что список холодильника устарел. */

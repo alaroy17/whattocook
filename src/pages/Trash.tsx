@@ -5,6 +5,7 @@ import { Confirm, Empty, toast } from '../components/ui'
 import { IconRefresh, IconTrash } from '../components/Icons'
 import { formatDate } from '../lib/date'
 import { TOMBSTONE_DAYS, type Recipe } from '../types'
+import { isPurged } from '../lib/db'
 import { countOf, daysWord } from '../lib/util'
 import { discardPhoto } from '../lib/photos'
 
@@ -17,12 +18,16 @@ export function Trash() {
   const { db, restore, purge } = useStore()
   const [confirmPurge, setConfirmPurge] = useState(false)
 
+  /*
+   * Очищенное скрываем по отметке: сами надгробия остаются в базе, пока
+   * удаление не доедет до второго устройства, иначе блюдо возвращалось живым.
+   */
   const items = useMemo<Recipe[]>(
     () =>
       (Object.values(db.recipes) as Recipe[])
-        .filter((recipe) => recipe.deletedAt)
+        .filter((recipe) => recipe.deletedAt && !isPurged(recipe, db.settings.purgedAt?.recipes))
         .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? '')),
-    [db.recipes],
+    [db.recipes, db.settings.purgedAt],
   )
 
   const daysLeft = (deletedAt: string) => {
@@ -86,8 +91,8 @@ export function Trash() {
           onCancel={() => setConfirmPurge(false)}
           onConfirm={() => {
             // Фотографии удалённых блюд иначе остались бы на Диске без владельца.
-            for (const recipe of Object.values(db.recipes)) {
-              if (recipe.deletedAt && recipe.photoId) void discardPhoto(recipe.photoId)
+            for (const recipe of items) {
+              if (recipe.photoId) void discardPhoto(recipe.photoId)
             }
             /*
              * Чистим только то, что корзина показывает, — рецепты. Скрытые надгробия

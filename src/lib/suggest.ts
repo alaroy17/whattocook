@@ -165,7 +165,8 @@ export function scoreRecipes(
 /** Случайное блюдо: не совсем равномерно — блюда с высоким счётом выпадают чаще. */
 export function pickRandom(suggestions: Suggestion[], fair = false): Suggestion | null {
   const pool = suggestions.filter((s) => !s.tooRecent)
-  if (pool.length === 0) return suggestions[0] ?? null
+  // Всё готовили на днях — честно ничего не предлагаем, а не подсовываем вчерашнее.
+  if (pool.length === 0) return null
   if (fair) return pool[Math.floor(Math.random() * pool.length)]
   const top = pool.slice(0, Math.min(25, pool.length))
   const min = Math.min(...top.map((s) => s.score))

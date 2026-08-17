@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
@@ -17,6 +17,7 @@ import {
   WEEKDAYS_SHORT,
 } from '../lib/date'
 import { classNames, countOf, formatMoney } from '../lib/util'
+import { guessMeal } from '../lib/suggest'
 import { IconChevronLeft, IconChevronRight, IconPlus } from '../components/Icons'
 import { EntryEditor } from '../components/EntryEditor'
 import { Avatar, Empty, SearchInput, Segmented } from '../components/ui'
@@ -71,7 +72,8 @@ export function CalendarPage() {
     () => alive(db.entries).filter((entry) => entry.date.startsWith(month.slice(0, 7))),
     [db.entries, month],
   )
-  const cooked = monthEntries.filter((entry) => entry.status === 'done')
+  // «Доедаем» — не отдельная готовка: иначе шапка календаря спорила со статистикой.
+  const cooked = monthEntries.filter((entry) => entry.status === 'done' && !entry.leftovers)
   const monthCost = cooked.reduce((sum, entry) => sum + (entry.cost ?? 0), 0)
 
   /** Легенда: только те разделы, которые встретились в этом месяце. */
@@ -115,37 +117,60 @@ export function CalendarPage() {
    * остаются для мыши. Горизонтальный жест отличаем от вертикальной прокрутки
    * по преобладанию dx, а клик после свайпа гасим, чтобы не выбрать день случайно.
    */
-  const swipeStart = useRef<{ x: number; y: number; id: number } | null>(null)
+  const swipeStart = useRef<{ x: number; y: number; id: number; width: number } | null>(null)
   const suppressClick = useRef(false)
   const viewport = useRef<HTMLDivElement | null>(null)
-  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** Сдвиг ленты за пальцем в пикселях; anim — идёт доводка анимацией. */
+  const track = useRef<HTMLDivElement | null>(null)
+  /** Сдвиг ленты. Во время жеста пишется прямо в стиль, в state — только для анимации. */
+  const dragRef = useRef(0)
   const [drag, setDrag] = useState(0)
   const [anim, setAnim] = useState(false)
 
-  useEffect(() => () => (commitTimer.current ? clearTimeout(commitTimer.current) : undefined), [])
+  const offset = (value: number) => `translate3d(calc(-33.3333% + ${value}px), 0, 0)`
 
   /**
-   * Доводим ленту до соседней страницы анимацией, а когда она доехала —
-   * меняем месяц и мгновенно возвращаем ленту в центр: на экране в этот момент
-   * уже нужный месяц, поэтому прыжка не видно.
+   * Во время жеста сдвиг пишется в стиль напрямую: state здесь перерисовывал бы
+   * три сетки по 42 ячейки на каждое движение пальца, и свайп рвался бы.
+   */
+  const dragTo = (value: number) => {
+    dragRef.current = value
+    if (track.current) track.current.style.transform = offset(value)
+  }
+
+  const width = () => viewport.current?.getBoundingClientRect().width ?? 320
+
+  /**
+   * Месяц меняем сразу, а ленту тем же кадром сдвигаем на страницу назад —
+   * картинка не дёргается, потому что соседний месяц уже стал центральным.
+   * Следующим кадром включаем анимацию и едем в центр. Так листание не зависит
+   * от таймеров: подряд нажатые стрелки не теряются, а свёрнутое приложение
+   * не оставляет ленту застрявшей на полпути.
    */
   const goMonth = (step: number) => {
-    if (commitTimer.current) return
-    const width = viewport.current?.offsetWidth ?? 320
-    setAnim(true)
-    setDrag(-step * width)
-    commitTimer.current = setTimeout(() => {
-      commitTimer.current = null
-      setAnim(false)
+    const shift = step * width()
+    setAnim(false)
+    setMonth(addMonths(month, step))
+    dragRef.current += shift
+    setDrag(dragRef.current)
+    /*
+     * Едем в центр следующим кадром. Запасной таймер обязателен: в скрытой
+     * вкладке кадры не выдаются вовсе, и лента осталась бы сдвинутой.
+     */
+    let done = false
+    const toCenter = () => {
+      if (done) return
+      done = true
+      setAnim(true)
+      dragRef.current = 0
       setDrag(0)
-      setMonth(addMonths(month, step))
-    }, 220)
+    }
+    requestAnimationFrame(() => requestAnimationFrame(toCenter))
+    setTimeout(toCenter, 80)
   }
 
   const onPointerDown = (event: React.PointerEvent) => {
-    if (!event.isPrimary || commitTimer.current) return
-    swipeStart.current = { x: event.clientX, y: event.clientY, id: event.pointerId }
+    if (!event.isPrimary) return
+    swipeStart.current = { x: event.clientX, y: event.clientY, id: event.pointerId, width: width() }
     suppressClick.current = false
     setAnim(false)
   }
@@ -156,11 +181,25 @@ export function CalendarPage() {
     const dy = event.clientY - start.y
     // Пока жест не стал явно горизонтальным, ленту не двигаем — это прокрутка.
     if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.2) return
-    setDrag(dx)
+    /*
+     * Захват указателя: без него мышь, отпущенная над нижней панелью или
+     * за краем окна, не доносит pointerup — и лента оставалась сдвинутой.
+     * Ошибку захвата глотаем: сам жест из-за неё ломаться не должен.
+     */
+    try {
+      if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.setPointerCapture(event.pointerId)
+      }
+    } catch {
+      // указатель уже отпущен — работаем без захвата
+    }
+    // Дальше соседней страницы тянуть некуда — там пустота.
+    dragTo(Math.max(-start.width, Math.min(start.width, dx)))
   }
   /** Жест не дотянул — лента мягко возвращается на место. */
   const settle = () => {
     setAnim(true)
+    dragRef.current = 0
     setDrag(0)
   }
   const onPointerUp = (event: React.PointerEvent) => {
@@ -184,6 +223,12 @@ export function CalendarPage() {
       suppressClick.current = false
     }, 0)
     goMonth(dx < 0 ? 1 : -1)
+  }
+  const onPointerCancel = (event: React.PointerEvent) => {
+    const start = swipeStart.current
+    if (!start || event.pointerId !== start.id) return
+    swipeStart.current = null
+    settle()
   }
   const onClickCapture = (event: React.MouseEvent) => {
     if (!suppressClick.current) return
@@ -210,18 +255,8 @@ export function CalendarPage() {
         showUser={false}
       />
 
-      <main
-        className="content"
-        style={{ touchAction: 'pan-y' }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={() => {
-          swipeStart.current = null
-          settle()
-        }}
-        onClickCapture={onClickCapture}
-      >
+      {/* Жест живёт только на сетке: на всём <main> он листал месяц и в «Ленте» */}
+      <main className="content">
         <div className="row-between" style={{ marginBottom: 12 }}>
           <Segmented
             value={view}
@@ -245,13 +280,34 @@ export function CalendarPage() {
               справа следующий. Палец двигает ленту целиком, поэтому из-за края
               выезжает настоящий соседний месяц.
             */}
-            <div className="cal-viewport" ref={viewport}>
+            <div
+              className="cal-viewport"
+              ref={viewport}
+              style={{ touchAction: 'pan-y pinch-zoom' }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
+              onClickCapture={onClickCapture}
+              /*
+               * Фокус на скрытой странице заставлял браузер прокрутить окно
+               * к ней, и календарь навсегда оставался сдвинутым на месяц.
+               */
+              onScroll={(event) => (event.currentTarget.scrollLeft = 0)}
+            >
               <div
+                ref={track}
                 className={classNames('cal-track', anim && 'anim')}
-                style={{ transform: `translate3d(calc(-33.3333% + ${drag}px), 0, 0)` }}
+                style={{ transform: offset(drag) }}
               >
-                {pages.map((page) => (
-                  <div className="cal" key={page.month}>
+                {pages.map((page, index) => (
+                  <div
+                    className="cal"
+                    key={page.month}
+                    /* Соседние месяцы — только картинка: ни фокуса, ни озвучки */
+                    inert={index !== 1}
+                    aria-hidden={index !== 1}
+                  >
                     {WEEKDAYS_SHORT.map((day) => (
                       <div className="cal-head" key={day}>
                         {day}
@@ -403,7 +459,7 @@ export function CalendarPage() {
         <EntryEditor
           key={editing === 'new' ? 'new' : editing.id}
           entry={editing === 'new' ? undefined : editing}
-          defaults={editing === 'new' ? { date: selected, meal: 'dinner', status: 'done' } : undefined}
+          defaults={editing === 'new' ? { date: selected, meal: guessMeal(undefined), status: 'done' } : undefined}
           onClose={() => setEditing(null)}
         />
       )}

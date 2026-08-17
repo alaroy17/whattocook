@@ -169,8 +169,17 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
   const [name, setName] = useState(product?.name ?? '')
   const [group, setGroup] = useState<string>(product?.group ?? 'Прочее')
   const [unit, setUnit] = useState(product?.unit ?? 'г')
-  const [packQty, setPackQty] = useState(product?.packQty?.toString() ?? '')
-  const [packPrice, setPackPrice] = useState(product?.packPrice?.toString() ?? '')
+  /*
+   * У продукта может быть цена без полей упаковки (импорт, старая база).
+   * Показываем её как «1 единица за столько-то», иначе простое «Сохранить»
+   * после правки отдела молча стирало цену.
+   */
+  const [packQty, setPackQty] = useState(
+    product?.packQty?.toString() ?? (product?.price != null ? '1' : ''),
+  )
+  const [packPrice, setPackPrice] = useState(
+    product?.packPrice?.toString() ?? (product?.price != null ? String(product.price) : ''),
+  )
   const [inStock, setInStock] = useState(Boolean(product?.inStock))
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -199,7 +208,9 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
       packPrice: total > 0 ? total : null,
       price: unitPrice,
       inStock,
-      stockUpdatedAt: nowIso(),
+      // Дату трогаем, только если правда меняли наличие: иначе проставленные
+      // цены гасили напоминание «проверьте, что есть дома» на неделю.
+      ...(inStock !== Boolean(product?.inStock) ? { stockUpdatedAt: nowIso() } : {}),
     })
     onClose()
   }

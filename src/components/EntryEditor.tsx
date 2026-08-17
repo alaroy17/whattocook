@@ -5,8 +5,9 @@ import { useStore } from '../lib/store'
 import { Avatar, Confirm, Field, Segmented, Sheet, Stars, UserPicker, toast } from './ui'
 import { RecipePicker } from './RecipePicker'
 import { buildProductIndex, recipeCost, servingsMultiplier } from '../lib/cost'
+import { guessMeal } from '../lib/suggest'
 import { alive } from '../lib/db'
-import { isLikelyLeftovers } from '../lib/entries'
+import { entryForRecipeOn, isLikelyLeftovers } from '../lib/entries'
 import { IconTrash } from './Icons'
 
 export function EntryEditor({
@@ -44,6 +45,7 @@ export function EntryEditor({
     return false
   })
   const leftoversTouched = useRef(false)
+  const mealTouched = useRef(false)
   const [picking, setPicking] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -67,6 +69,18 @@ export function EntryEditor({
     if (!recipeId && !title.trim()) {
       toast('Выберите блюдо или впишите название')
       return
+    }
+    /*
+     * Дубли блокируем и здесь: остальные пути добавления проверяют день,
+     * а через форму одно и то же блюдо попадало в день дважды — и потом
+     * считалось двумя готовками с двойной закупкой продуктов.
+     */
+    if (!entry?.id && recipeId) {
+      const existing = entryForRecipeOn(db, date, recipeId)
+      if (existing) {
+        toast(existing.status === 'planned' ? 'Уже в списке на этот день' : 'В этот день уже готовили')
+        return
+      }
     }
     const parsedCost = Number(cost.replace(',', '.'))
     saveEntry({
@@ -121,7 +135,10 @@ export function EntryEditor({
                 <select
                   className="input"
                   value={meal}
-                  onChange={(e) => setMeal(e.target.value as MealSlot)}
+                  onChange={(e) => {
+                    mealTouched.current = true
+                    setMeal(e.target.value as MealSlot)
+                  }}
                 >
                   {MEAL_SLOTS.map((slot) => (
                     <option key={slot.id} value={slot.id}>
@@ -275,6 +292,8 @@ export function EntryEditor({
             setRecipeId(picked.id)
             setTitle('')
             syncAuto(date, picked.id)
+            // Приём пищи угадываем по разделу, пока его не меняли руками.
+            if (!entry && !mealTouched.current) setMeal(guessMeal(picked.category))
           }}
           onFreeText={(text) => {
             setRecipeId(undefined)
