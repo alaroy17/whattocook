@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import * as drive from '../lib/drive'
@@ -115,6 +115,20 @@ export function SettingsPage() {
   const connected = sync.status === 'idle' || sync.status === 'syncing'
   const shared = db.settings.sharedWith ?? []
 
+  /** Кто реально имеет доступ к папке — по данным Диска. null = ещё грузится. */
+  const [access, setAccess] = useState<drive.FolderAccess[] | null>(null)
+
+  const loadAccess = useCallback(() => {
+    return drive
+      .listFolderAccess()
+      .then(setAccess)
+      .catch(() => setAccess([]))
+  }, [])
+
+  useEffect(() => {
+    if (connected) void loadAccess()
+  }, [connected, loadAccess])
+
   const doConnect = async () => {
     setBusy(true)
     try {
@@ -226,17 +240,24 @@ export function SettingsPage() {
               <div className="divider" />
 
               <strong style={{ fontSize: 14 }}>Доступ к папке «{drive.APP_FOLDER_NAME}»</strong>
-              {shared.length === 0 ? (
+              {/* Список — реальные права с Диска, а не собственные записи приложения */}
+              {access === null ? (
                 <div className="small muted" style={{ marginTop: 6 }}>
-                  Пока только у вас
+                  Проверяем…
+                </div>
+              ) : access.length === 0 ? (
+                <div className="small muted" style={{ marginTop: 6 }}>
+                  Не удалось получить список — потяните «Синхронизировать» и откройте снова
                 </div>
               ) : (
                 <div style={{ marginTop: 6 }}>
-                  {shared.map((email) => (
-                    <div className="cat-row" key={email}>
+                  {access.map((person) => (
+                    <div className="cat-row" key={person.email}>
                       <IconCheck size={16} style={{ color: 'var(--good)' }} />
-                      <span className="grow ellipsis">{email}</span>
-                      <span className="small muted">приглашение отправлено</span>
+                      <span className="grow ellipsis">{person.email}</span>
+                      <span className="small muted">
+                        {person.role === 'owner' ? 'владелец' : 'есть доступ'}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -263,6 +284,7 @@ export function SettingsPage() {
                             updateSettings({ sharedWith: [...new Set([...shared, email])] })
                             toast('Доступ открыт, приглашение отправлено')
                             setShareEmail('')
+                            return loadAccess()
                           })
                           .catch((error: unknown) =>
                             toast(error instanceof Error ? error.message : 'Не удалось открыть доступ'),

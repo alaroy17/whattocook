@@ -613,6 +613,31 @@ export async function shareWith(email: string): Promise<void> {
   }
 }
 
+export interface FolderAccess {
+  email: string
+  /** owner — владелец папки, writer — полный доступ к содержимому. */
+  role: string
+}
+
+/**
+ * Реальные права на папку приложения — прямо с Диска.
+ * Собственный список «кому отправили» ненадёжен: приглашения, отправленные
+ * до его появления (или мимо приложения), в нём отсутствуют, и экран честно
+ * врал «доступ только у вас».
+ */
+export async function listFolderAccess(): Promise<FolderAccess[]> {
+  const folder = await resolveAppFolder()
+  const response = await api(
+    `/drive/v3/files/${encodeURIComponent(folder)}/permissions?fields=permissions(emailAddress,role)`,
+  )
+  const data = (await response.json()) as {
+    permissions?: { emailAddress?: string; role?: string }[]
+  }
+  return (data.permissions ?? [])
+    .filter((permission) => permission.emailAddress)
+    .map((permission) => ({ email: permission.emailAddress!, role: permission.role ?? '' }))
+}
+
 async function getParents(fileId: string): Promise<string[]> {
   try {
     const response = await api(`/drive/v3/files/${encodeURIComponent(fileId)}?fields=parents`)
