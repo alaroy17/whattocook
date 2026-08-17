@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
@@ -48,8 +48,17 @@ export function CalendarPage() {
     return map
   }, [db.entries])
 
-  const grid = useMemo(
-    () => dateRange(startOfWeek(month), addDays(startOfWeek(endOfMonth(month)), 6)),
+  /**
+   * Сетки трёх месяцев подряд: предыдущего, текущего и следующего. Лента едет
+   * за пальцем целиком, поэтому из-за края выезжает настоящий соседний месяц,
+   * а не пустота.
+   */
+  const pages = useMemo(
+    () =>
+      [-1, 0, 1].map((offset) => {
+        const start = addMonths(month, offset)
+        return { month: start, grid: dateRange(startOfWeek(start), addDays(startOfWeek(endOfMonth(start)), 6)) }
+      }),
     [month],
   )
 
@@ -108,33 +117,50 @@ export function CalendarPage() {
    */
   const swipeStart = useRef<{ x: number; y: number; id: number } | null>(null)
   const suppressClick = useRef(false)
-  /** Сдвиг сетки за пальцем и сторона, с которой въезжает новый месяц. */
+  const viewport = useRef<HTMLDivElement | null>(null)
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Сдвиг ленты за пальцем в пикселях; anim — идёт доводка анимацией. */
   const [drag, setDrag] = useState(0)
-  const [snapping, setSnapping] = useState(false)
-  const [dir, setDir] = useState<'left' | 'right' | null>(null)
+  const [anim, setAnim] = useState(false)
 
+  useEffect(() => () => (commitTimer.current ? clearTimeout(commitTimer.current) : undefined), [])
+
+  /**
+   * Доводим ленту до соседней страницы анимацией, а когда она доехала —
+   * меняем месяц и мгновенно возвращаем ленту в центр: на экране в этот момент
+   * уже нужный месяц, поэтому прыжка не видно.
+   */
   const goMonth = (step: number) => {
-    setDir(step > 0 ? 'left' : 'right')
-    setMonth(addMonths(month, step))
+    if (commitTimer.current) return
+    const width = viewport.current?.offsetWidth ?? 320
+    setAnim(true)
+    setDrag(-step * width)
+    commitTimer.current = setTimeout(() => {
+      commitTimer.current = null
+      setAnim(false)
+      setDrag(0)
+      setMonth(addMonths(month, step))
+    }, 220)
   }
 
   const onPointerDown = (event: React.PointerEvent) => {
-    if (!event.isPrimary) return
+    if (!event.isPrimary || commitTimer.current) return
     swipeStart.current = { x: event.clientX, y: event.clientY, id: event.pointerId }
     suppressClick.current = false
-    setSnapping(false)
+    setAnim(false)
   }
   const onPointerMove = (event: React.PointerEvent) => {
     const start = swipeStart.current
     if (!start || event.pointerId !== start.id) return
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
-    // Пока жест не стал явно горизонтальным, сетку не двигаем — это прокрутка.
+    // Пока жест не стал явно горизонтальным, ленту не двигаем — это прокрутка.
     if (Math.abs(dx) < 12 || Math.abs(dx) < Math.abs(dy) * 1.2) return
-    setDrag(dx * 0.85)
+    setDrag(dx)
   }
+  /** Жест не дотянул — лента мягко возвращается на место. */
   const settle = () => {
-    setSnapping(true)
+    setAnim(true)
     setDrag(0)
   }
   const onPointerUp = (event: React.PointerEvent) => {
@@ -157,12 +183,6 @@ export function CalendarPage() {
     setTimeout(() => {
       suppressClick.current = false
     }, 0)
-    /*
-     * Сдвиг сбрасываем без анимации: месяц меняется, сетка пересобирается
-     * с новым ключом и въезжает своей анимацией с нужной стороны.
-     */
-    setSnapping(false)
-    setDrag(0)
     goMonth(dx < 0 ? 1 : -1)
   }
   const onClickCapture = (event: React.MouseEvent) => {
@@ -221,61 +241,63 @@ export function CalendarPage() {
         {view === 'month' ? (
           <>
             {/*
-              Два слоя намеренно: дорожка держит сдвиг за пальцем, сетка внутри —
-              анимацию въезда. На одном элементе inline-transform и CSS-анимация
-              дерутся за одно свойство, и сетка застревала сдвинутой.
+              Лента шириной в три экрана: слева предыдущий месяц, в центре текущий,
+              справа следующий. Палец двигает ленту целиком, поэтому из-за края
+              выезжает настоящий соседний месяц.
             */}
-            <div className="cal-viewport">
+            <div className="cal-viewport" ref={viewport}>
               <div
-                className={classNames('cal-track', snapping && 'snap')}
-                style={drag !== 0 ? { transform: `translateX(${drag}px)` } : undefined}
+                className={classNames('cal-track', anim && 'anim')}
+                style={{ transform: `translate3d(calc(-33.3333% + ${drag}px), 0, 0)` }}
               >
-              <div key={month} className={classNames('cal', dir && `in-${dir}`)}>
-              {WEEKDAYS_SHORT.map((day) => (
-                <div className="cal-head" key={day}>
-                  {day}
-                </div>
-              ))}
-              {grid.map((date) => {
-                const entries = byDate.get(date) ?? []
-                const inMonth = date.slice(0, 7) === month.slice(0, 7)
-                return (
-                  <button
-                    key={date}
-                    className={classNames(
-                      'cal-day',
-                      !inMonth && 'other',
-                      date === today() && 'today',
-                      date === selected && 'selected',
-                      isWeekend(date) && 'weekend',
-                    )}
-                    onClick={() => setSelected(date)}
-                  >
-                    <span className="cal-num">
-                      {fromIsoDate(date).getDate()}
-                      {entries.some((entry) => entry.cook) && (
-                        <span className="row" style={{ gap: 2 }}>
-                          {[...new Set(entries.map((entry) => entry.cook).filter(Boolean))]
-                            .slice(0, 2)
-                            .map((cook) => (
-                              <span key={cook} className={`cal-cook cook-dot cook-dot-${cook}`} />
-                            ))}
-                        </span>
-                      )}
-                    </span>
-                    {entries.slice(0, 3).map((entry) => (
-                      <span
-                        key={entry.id}
-                        className={classNames('cal-bar', entry.status === 'planned' && 'planned')}
-                        style={{ background: categoryColor(categoryOf(entry)) }}
-                        title={nameOf(entry)}
-                      />
+                {pages.map((page) => (
+                  <div className="cal" key={page.month}>
+                    {WEEKDAYS_SHORT.map((day) => (
+                      <div className="cal-head" key={day}>
+                        {day}
+                      </div>
                     ))}
-                    {entries.length > 3 && <span className="cal-more">+{entries.length - 3}</span>}
-                  </button>
-                )
-              })}
-              </div>
+                    {page.grid.map((date) => {
+                      const entries = byDate.get(date) ?? []
+                      const inMonth = date.slice(0, 7) === page.month.slice(0, 7)
+                      return (
+                        <button
+                          key={date}
+                          className={classNames(
+                            'cal-day',
+                            !inMonth && 'other',
+                            date === today() && 'today',
+                            date === selected && 'selected',
+                            isWeekend(date) && 'weekend',
+                          )}
+                          onClick={() => setSelected(date)}
+                        >
+                          <span className="cal-num">
+                            {fromIsoDate(date).getDate()}
+                            {entries.some((entry) => entry.cook) && (
+                              <span className="row" style={{ gap: 2 }}>
+                                {[...new Set(entries.map((entry) => entry.cook).filter(Boolean))]
+                                  .slice(0, 2)
+                                  .map((cook) => (
+                                    <span key={cook} className={`cal-cook cook-dot cook-dot-${cook}`} />
+                                  ))}
+                              </span>
+                            )}
+                          </span>
+                          {entries.slice(0, 3).map((entry) => (
+                            <span
+                              key={entry.id}
+                              className={classNames('cal-bar', entry.status === 'planned' && 'planned')}
+                              style={{ background: categoryColor(categoryOf(entry)) }}
+                              title={nameOf(entry)}
+                            />
+                          ))}
+                          {entries.length > 3 && <span className="cal-more">+{entries.length - 3}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
 
