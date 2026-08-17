@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive } from '../lib/db'
@@ -101,6 +101,35 @@ export function CalendarPage() {
 
   const dayEntries = byDate.get(selected) ?? []
 
+  /*
+   * Свайп по календарю листает месяцы, как в системных календарях, — стрелки
+   * остаются для мыши. Горизонтальный жест отличаем от вертикальной прокрутки
+   * по преобладанию dx, а клик после свайпа гасим, чтобы не выбрать день случайно.
+   */
+  const swipeStart = useRef<{ x: number; y: number; id: number } | null>(null)
+  const suppressClick = useRef(false)
+  const onPointerDown = (event: React.PointerEvent) => {
+    if (!event.isPrimary) return
+    swipeStart.current = { x: event.clientX, y: event.clientY, id: event.pointerId }
+    suppressClick.current = false
+  }
+  const onPointerUp = (event: React.PointerEvent) => {
+    const start = swipeStart.current
+    swipeStart.current = null
+    if (!start || event.pointerId !== start.id) return
+    const dx = event.clientX - start.x
+    const dy = event.clientY - start.y
+    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.5) return
+    suppressClick.current = true
+    setMonth(addMonths(month, dx < 0 ? 1 : -1))
+  }
+  const onClickCapture = (event: React.MouseEvent) => {
+    if (!suppressClick.current) return
+    suppressClick.current = false
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
   return (
     <>
       <TopBar
@@ -119,7 +148,14 @@ export function CalendarPage() {
         showUser={false}
       />
 
-      <main className="content">
+      <main
+        className="content"
+        style={{ touchAction: 'pan-y' }}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => (swipeStart.current = null)}
+        onClickCapture={onClickCapture}
+      >
         <div className="row-between" style={{ marginBottom: 12 }}>
           <Segmented
             value={view}

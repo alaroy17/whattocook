@@ -1,5 +1,5 @@
 import type { Database, Product, Recipe, RecipeIngredient } from '../types'
-import { addDays, today } from './date'
+import { addDays } from './date'
 import { normalizeName, nowIso, uid } from './util'
 
 type SeedRecipe = {
@@ -12,12 +12,15 @@ type SeedRecipe = {
   chef: 'sasha' | 'andrei' | 'any'
   ingredients: [string, number | null, string][]
   steps: string
-  /** Сколько дней назад готовили в последний раз (для демонстрации подсказок). */
-  cookedDaysAgo: number[]
   /** Постоянное блюдо и его привычный ритм в днях. */
   regularEveryDays?: number
 }
 
+/*
+ * Примеры — это ТОЛЬКО рецепты и продукты. Никакой выдуманной истории
+ * приготовлений, оценок и избранного: календарь и статистика принадлежат
+ * пользователям, придумывать за них прошлое нельзя.
+ */
 const RECIPES: SeedRecipe[] = [
   {
     name: 'Говядина по-бургундски',
@@ -36,7 +39,6 @@ const RECIPES: SeedRecipe[] = [
       ['Чеснок', 3, 'зуб.'],
     ],
     steps: 'Обжарить мясо крупными кусками до корочки.\nДобавить овощи, влить вино, тушить под крышкой 2 часа.\nВ конце выпарить соус до густоты.',
-    cookedDaysAgo: [96],
   },
   {
     name: 'Борщ',
@@ -56,7 +58,6 @@ const RECIPES: SeedRecipe[] = [
       ['Томатная паста', 2, 'ст.л.'],
     ],
     steps: 'Сварить бульон.\nСвёклу и морковь потушить с томатной пастой.\nДобавить в бульон картофель и капусту, затем зажарку. Дать настояться час.',
-    cookedDaysAgo: [34, 71],
   },
   {
     name: 'Паста карбонара',
@@ -74,7 +75,6 @@ const RECIPES: SeedRecipe[] = [
       ['Чёрный перец', null, 'щеп.'],
     ],
     steps: 'Обжарить бекон.\nЖелтки смешать с тёртым пармезаном.\nГорячую пасту снять с огня, вмешать яичную смесь и бекон.',
-    cookedDaysAgo: [9, 26, 44],
   },
   {
     name: 'Куриный суп с лапшой',
@@ -92,7 +92,6 @@ const RECIPES: SeedRecipe[] = [
       ['Картофель', 2, 'шт'],
     ],
     steps: 'Сварить бульон на курице, добавить овощи и лапшу.',
-    cookedDaysAgo: [17],
   },
   {
     name: 'Овощное рагу',
@@ -110,7 +109,6 @@ const RECIPES: SeedRecipe[] = [
       ['Лук репчатый', 1, 'шт'],
     ],
     steps: 'Овощи нарезать крупно, обжарить по очереди, соединить и тушить 25 минут.',
-    cookedDaysAgo: [58],
   },
   {
     name: 'Сырники',
@@ -127,7 +125,6 @@ const RECIPES: SeedRecipe[] = [
       ['Сахар', 2, 'ст.л.'],
     ],
     steps: 'Смешать творог с яйцом, сахаром и мукой. Сформировать сырники и обжарить на среднем огне.',
-    cookedDaysAgo: [12, 33],
   },
   {
     name: 'Овсяная каша',
@@ -144,7 +141,6 @@ const RECIPES: SeedRecipe[] = [
       ['Сахар', 1, 'ст.л.'],
     ],
     steps: 'Хлопья залить молоком, довести до кипения и варить 7 минут, помешивая.\nСнять с огня, добавить масло и дать постоять пару минут под крышкой.',
-    cookedDaysAgo: [7],
   },
   {
     name: 'Яичница',
@@ -160,7 +156,6 @@ const RECIPES: SeedRecipe[] = [
       ['Соль', null, ''],
     ],
     steps: 'Разогреть сковороду со сливочным маслом.\nРазбить яйца и жарить на среднем огне, пока не схватится белок. Посолить.',
-    cookedDaysAgo: [9, 23],
   },
   {
     name: 'Запечённый лосось с овощами',
@@ -177,7 +172,6 @@ const RECIPES: SeedRecipe[] = [
       ['Оливковое масло', 2, 'ст.л.'],
     ],
     steps: 'Рыбу и овощи сбрызнуть маслом и лимоном, запекать 20 минут при 200°.',
-    cookedDaysAgo: [63],
   },
   {
     name: 'Плов',
@@ -195,7 +189,6 @@ const RECIPES: SeedRecipe[] = [
       ['Зира', 1, 'ч.л.'],
     ],
     steps: 'Обжарить мясо с луком и морковью, залить водой, выложить рис, готовить под крышкой до готовности.',
-    cookedDaysAgo: [120],
   },
   {
     name: 'Салат с тунцом',
@@ -212,7 +205,6 @@ const RECIPES: SeedRecipe[] = [
       ['Оливки', 50, 'г'],
     ],
     steps: 'Всё нарезать, смешать, заправить оливковым маслом.',
-    cookedDaysAgo: [21],
   },
   {
     name: 'Салат с рукколой, помидорами и моцареллой',
@@ -230,7 +222,6 @@ const RECIPES: SeedRecipe[] = [
       ['Бальзамический уксус', 1, 'ст.л.'],
     ],
     steps: 'Помидоры разрезать пополам, моцареллу порвать руками, смешать с рукколой и заправить.',
-    cookedDaysAgo: [4, 11, 18, 25],
     regularEveryDays: 6,
   },
   {
@@ -248,7 +239,6 @@ const RECIPES: SeedRecipe[] = [
       ['Сахар', 180, 'г'],
     ],
     steps: 'Взбить яйца с сахаром, вмешать муку, выложить на яблоки, печь 40 минут при 180°.',
-    cookedDaysAgo: [77],
   },
   {
     name: 'Курица терияки',
@@ -266,7 +256,6 @@ const RECIPES: SeedRecipe[] = [
       ['Рис', 200, 'г'],
     ],
     steps: 'Обжарить филе, влить соус из соевого соуса, мёда и чеснока, выпарить до глазури. Подавать с рисом.',
-    cookedDaysAgo: [5, 29],
   },
   {
     name: 'Курица с картошкой в духовке',
@@ -284,7 +273,6 @@ const RECIPES: SeedRecipe[] = [
       ['Соль', null, ''],
     ],
     steps: 'Курицу натереть солью и специями, картофель нарезать дольками, перемешать с маслом и луком.\nЗапекать при 200° около часа до румяной корочки.',
-    cookedDaysAgo: [42],
   },
   {
     name: 'Хумус',
@@ -301,7 +289,6 @@ const RECIPES: SeedRecipe[] = [
       ['Чеснок', 2, 'зуб.'],
     ],
     steps: 'Пробить нут блендером с тахини, лимонным соком и чесноком до гладкости.',
-    cookedDaysAgo: [88],
   },
   {
     name: 'Омлет с помидорами',
@@ -317,8 +304,6 @@ const RECIPES: SeedRecipe[] = [
       ['Молоко', 60, 'мл'],
     ],
     steps: 'Взбить яйца с молоком, вылить на сковороду с помидорами, готовить под крышкой 6 минут.',
-    cookedDaysAgo: [3, 11, 19],
-    regularEveryDays: 5,
   },
   {
     name: 'Ризотто с грибами',
@@ -336,7 +321,6 @@ const RECIPES: SeedRecipe[] = [
       ['Пармезан', 50, 'г'],
     ],
     steps: 'Обжарить лук и грибы, всыпать рис, влить вино, затем частями бульон. В конце вмешать пармезан.',
-    cookedDaysAgo: [49],
   },
 ]
 
@@ -411,8 +395,8 @@ const IN_STOCK = new Set([
 ])
 
 /**
- * Заполняет базу примерами. Повторный вызов ничего не дублирует:
- * то, что уже есть с таким названием, пропускается.
+ * Заполняет базу примерами: только рецепты и продукты, без истории и оценок.
+ * Повторный вызов ничего не дублирует: что уже есть с таким названием — пропускается.
  */
 export function buildSeedDatabase(base: Database): Database {
   const time = nowIso()
@@ -469,8 +453,8 @@ export function buildSeedDatabase(base: Database): Database {
       servings: item.servings,
       difficulty: item.difficulty,
       chef: item.chef,
-      favorite: item.cookedDaysAgo.length > 2,
-      ratings: { sasha: 4 + (item.cookedDaysAgo.length > 1 ? 1 : 0), andrei: 4 },
+      favorite: false,
+      ratings: {},
       regular: item.regularEveryDays != null,
       regularEveryDays: item.regularEveryDays ?? null,
       createdAt: time,
@@ -483,22 +467,51 @@ export function buildSeedDatabase(base: Database): Database {
       next.settings = { ...next.settings, categories: [...next.settings.categories, item.category] }
       next.settingsUpdatedAt = time
     }
-
-    for (const daysAgo of item.cookedDaysAgo) {
-      const entryId = uid('e')
-      next.entries[entryId] = {
-        id: entryId,
-        date: addDays(today(), -daysAgo),
-        meal: item.category === 'Завтрак' ? 'breakfast' : item.category === 'Суп' ? 'lunch' : 'dinner',
-        status: 'done',
-        recipeId: id,
-        cook: item.chef === 'any' ? 'both' : item.chef,
-        createdAt: time,
-        updatedAt: time,
-        cost: null,
-      }
-    }
   }
 
   return next
+}
+
+/**
+ * Прежние версии примеров вместе с рецептами придумывали историю приготовлений
+ * в прошлом и оценки — чтобы подсказки было на чём показать. Пользователям такая
+ * самодеятельность не нужна: календарь и оценки принадлежат им.
+ *
+ * Выдуманная запись узнаётся по связке признаков: пример-рецепт + «голая» запись
+ * (без заметок, стоимости и оценок) + дата на три и больше дней раньше момента
+ * создания. Руками так не пишут: настоящие записи создаются в свой день или на
+ * днях. Вычистка идёт надгробиями, чтобы доехать и до второго устройства.
+ */
+export function removeSeedArtifacts(db: Database, at: string): Database {
+  const seedNames = new Set(RECIPES.map((item) => normalizeName(item.name)))
+  let changed = false
+
+  const entries = { ...db.entries }
+  for (const [id, entry] of Object.entries(db.entries)) {
+    if (entry.deletedAt || !entry.recipeId || entry.status !== 'done') continue
+    const recipe = db.recipes[entry.recipeId]
+    if (!recipe || !seedNames.has(normalizeName(recipe.name))) continue
+    const bare =
+      !entry.note &&
+      entry.cost == null &&
+      entry.servings == null &&
+      Object.keys(entry.ratings ?? {}).length === 0
+    if (!bare) continue
+    if (entry.date >= addDays(entry.createdAt.slice(0, 10), -2)) continue
+    entries[id] = { ...entry, deletedAt: at, updatedAt: at }
+    changed = true
+  }
+
+  // Оценки и «избранное», выданные сидом, снимаются — но только у нетронутых
+  // рецептов: любая правка пользователя сдвигает updatedAt, и мы её не трогаем.
+  const recipes = { ...db.recipes }
+  for (const [id, recipe] of Object.entries(db.recipes)) {
+    if (recipe.deletedAt || !seedNames.has(normalizeName(recipe.name))) continue
+    if (recipe.updatedAt !== recipe.createdAt) continue
+    if (Object.keys(recipe.ratings ?? {}).length === 0 && !recipe.favorite) continue
+    recipes[id] = { ...recipe, ratings: {}, favorite: false, updatedAt: at }
+    changed = true
+  }
+
+  return changed ? { ...db, entries, recipes } : db
 }

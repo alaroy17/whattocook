@@ -24,6 +24,7 @@ import {
   serialize,
 } from './db'
 import * as drive from './drive'
+import { removeSeedArtifacts } from './seed'
 import { ensureDailySnapshot, restoreSnapshot } from './snapshots'
 import { listPendingPhotos, uploadPendingPhoto } from './photos'
 import { nowIso, uid } from './util'
@@ -99,9 +100,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<Database>(() => {
     const loaded = loadLocal() ?? emptyDatabase()
     // Базы, собранные до единой сущности продуктов, догоняют: ингредиенты → каталог.
-    const withProducts = materializeIngredientProducts(loaded, nowIso())
-    if (withProducts !== loaded) saveLocal(withProducts)
-    return withProducts
+    // Заодно вычищается выдуманная сидом история приготовлений.
+    const prepared = materializeIngredientProducts(removeSeedArtifacts(loaded, nowIso()), nowIso())
+    if (prepared !== loaded) saveLocal(prepared)
+    return prepared
   })
   const [localMe, setLocalMe] = useState<UserId>(() => (localStorage.getItem(ME_KEY) as UserId) || 'andrei')
   const [connecting, setConnecting] = useState(false)
@@ -173,7 +175,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           const now = nowIso()
           merged = pruneTombstones(
             dedupeProducts(
-              materializeIngredientProducts(dedupeQuickEntries(mergeDatabases(dbRef.current, remote), now), now),
+              materializeIngredientProducts(
+                dedupeQuickEntries(removeSeedArtifacts(mergeDatabases(dbRef.current, remote), now), now),
+                now,
+              ),
               now,
             ),
           )

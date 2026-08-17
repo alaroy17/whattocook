@@ -22,7 +22,7 @@ import { MEAL_SLOTS } from '../types'
 import { agoWord, daysWord, intervalWord } from '../lib/util'
 import { categoriesWithRecipes } from '../lib/categories'
 import { fridgeNeedsReview, fridgeStaleDays } from '../lib/fridge'
-import { entryForRecipeOn } from '../lib/entries'
+import { entryForRecipeOn, isLikelyLeftovers } from '../lib/entries'
 import { EntryRow } from '../components/EntryRow'
 
 type Mode = 'smart' | 'random'
@@ -85,8 +85,9 @@ export function Today() {
       return
     }
     const meal = guessMeal(db.recipes[recipeId]?.category)
-    const saved = saveEntry({ date, meal, status: 'planned', recipeId })
-    toast(`Добавили на сегодня — ${mealName(meal).toLowerCase()}`, {
+    const leftovers = isLikelyLeftovers(db, date, recipeId)
+    const saved = saveEntry({ date, meal, status: 'planned', recipeId, ...(leftovers ? { leftovers: true } : {}) })
+    toast(`Добавили на сегодня — ${mealName(meal).toLowerCase()}${leftovers ? ' · доедаем' : ''}`, {
       label: 'Изменить',
       onClick: () => setEditingEntry(saved.id),
     })

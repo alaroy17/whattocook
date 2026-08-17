@@ -167,6 +167,11 @@ export interface Entry extends Syncable {
    * Влияет на количества в списке покупок.
    */
   servings?: number | null
+  /**
+   * Доедаем приготовленное раньше: в список покупок не попадает и отдельной
+   * готовкой в статистике не считается, но давность блюда обновляет.
+   */
+  leftovers?: boolean
 }
 
 export interface Product extends Syncable {

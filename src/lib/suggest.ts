@@ -23,8 +23,9 @@ export function buildHistory(db: Database, upTo: IsoDate = today()): CookHistory
     .sort((a, b) => a.date.localeCompare(b.date))
   for (const entry of entries) {
     const id = entry.recipeId!
+    // «Доедаем» обновляет давность (ели же), но готовкой не считается.
     lastCooked.set(id, entry.date)
-    timesCooked.set(id, (timesCooked.get(id) ?? 0) + 1)
+    if (!entry.leftovers) timesCooked.set(id, (timesCooked.get(id) ?? 0) + 1)
     const category = db.recipes[id]?.category
     if (category) recentCategories.set(category, entry.date)
   }

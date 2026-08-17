@@ -30,6 +30,7 @@ export function EntryEditor({
   const [ratings, setRatings] = useState(initial.ratings ?? {})
   const [cost, setCost] = useState(initial.cost != null ? String(initial.cost) : '')
   const [servings, setServings] = useState(initial.servings != null ? String(initial.servings) : '')
+  const [leftovers, setLeftovers] = useState(Boolean(initial.leftovers))
   const [picking, setPicking] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -61,6 +62,7 @@ export function EntryEditor({
       ratings,
       cost: cost.trim() && Number.isFinite(parsedCost) ? parsedCost : null,
       servings: servings.trim() ? Number(servings) : null,
+      leftovers: recipeId && leftovers ? true : undefined,
     })
     onClose()
   }
@@ -150,6 +152,17 @@ export function EntryEditor({
               </div>
             )}
           </div>
+
+          {recipeId && (
+            <label className="row-between" style={{ padding: '2px 0', cursor: 'pointer' }}>
+              <span>Доедаем</span>
+              <input
+                type="checkbox"
+                checked={leftovers}
+                onChange={(event) => setLeftovers(event.target.checked)}
+              />
+            </label>
+          )}
 
           {/* Порции и стоимость — второстепенные числа, им хватает одной строки */}
           <div className="row">

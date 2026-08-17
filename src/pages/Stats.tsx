@@ -46,7 +46,8 @@ export function Stats() {
   const from = period === 'all' ? '0000-01-01' : addDays(today(), -Number(period))
 
   const entries = useMemo(
-    () => alive(db.entries).filter((entry) => entry.status === 'done' && entry.date >= from),
+    // «Доедаем» — не отдельная готовка, в счёт и траты не попадает.
+    () => alive(db.entries).filter((entry) => entry.status === 'done' && !entry.leftovers && entry.date >= from),
     [db.entries, from],
   )
 

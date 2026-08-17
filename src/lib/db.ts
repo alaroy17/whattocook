@@ -97,6 +97,7 @@ function sanitizeEntry(item: Record<string, unknown>): Partial<Entry> | null {
     ratings: ratings(item.ratings),
     cost: num(item.cost),
     servings: num(item.servings),
+    ...(item.leftovers === true ? { leftovers: true } : {}),
   }
 }
 

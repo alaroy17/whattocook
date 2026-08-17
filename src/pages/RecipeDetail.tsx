@@ -9,7 +9,7 @@ import { RecipeEditor } from '../components/RecipeEditor'
 import { EntryEditor } from '../components/EntryEditor'
 import { buildProductIndex, ingredientCost, recipeCost, scaleIngredient, servingsMultiplier } from '../lib/cost'
 import { buildHistory, daysSince, guessMeal } from '../lib/suggest'
-import { entryForRecipeOn } from '../lib/entries'
+import { entryForRecipeOn, isLikelyLeftovers } from '../lib/entries'
 import { formatDate, today } from '../lib/date'
 import { agoWord, countOf, formatAmount, formatMoney, normalizeName, safeUrl, timesWord } from '../lib/util'
 import {
@@ -189,9 +189,16 @@ export function RecipeDetail() {
                 return
               }
               const meal = guessMeal(recipe.category)
-              saveEntry({ date: today(), meal, status: 'planned', recipeId: recipe.id })
+              const leftovers = isLikelyLeftovers(db, today(), recipe.id)
+              saveEntry({
+                date: today(),
+                meal,
+                status: 'planned',
+                recipeId: recipe.id,
+                ...(leftovers ? { leftovers: true } : {}),
+              })
               toast(
-                `Добавили на сегодня — ${MEAL_SLOTS.find((slot) => slot.id === meal)?.name.toLowerCase()}`,
+                `Добавили на сегодня — ${MEAL_SLOTS.find((slot) => slot.id === meal)?.name.toLowerCase()}${leftovers ? ' · доедаем' : ''}`,
               )
             }}
           >

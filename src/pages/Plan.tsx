@@ -16,7 +16,7 @@ import {
   shoppingListToText,
 } from '../lib/shopping'
 import { buildProductIndex, servingsMultiplier } from '../lib/cost'
-import { entryForRecipeOn } from '../lib/entries'
+import { entryForRecipeOn, isLikelyLeftovers } from '../lib/entries'
 import { classNames, formatAmount, formatMoney } from '../lib/util'
 import {
   IconBook,
@@ -71,7 +71,8 @@ export function Plan() {
     const result: { recipe: Recipe; multiplier: number }[] = []
     for (const date of days) {
       for (const entry of entriesByDate.get(date) ?? []) {
-        if (entry.status !== 'planned' || !entry.recipeId) continue
+        // Остатки уже приготовлены — покупать для них нечего.
+        if (entry.status !== 'planned' || !entry.recipeId || entry.leftovers) continue
         const recipe = db.recipes[entry.recipeId]
         // Если для этого раза указали своё число порций — количества масштабируются.
         if (recipe && !recipe.deletedAt) {
@@ -198,7 +199,10 @@ export function Plan() {
                         >
                           {nameOf(entry)}
                         </button>
-                        <span className="slot">{MEAL_SLOTS.find((m) => m.id === entry.meal)?.name}</span>
+                        <span className="slot">
+                          {MEAL_SLOTS.find((m) => m.id === entry.meal)?.name}
+                          {entry.leftovers ? ' · доедаем' : ''}
+                        </span>
                         {entry.cook && <Avatar id={entry.cook} />}
                         {entry.status === 'planned' && (
                           <button
@@ -338,7 +342,15 @@ export function Plan() {
               toast('Уже в плане на этот день')
               return
             }
-            saveEntry({ date: picking, meal: pickMeal, status: 'planned', recipeId: recipe.id })
+            const leftovers = isLikelyLeftovers(db, picking, recipe.id)
+            saveEntry({
+              date: picking,
+              meal: pickMeal,
+              status: 'planned',
+              recipeId: recipe.id,
+              ...(leftovers ? { leftovers: true } : {}),
+            })
+            if (leftovers) toast('Доедаем — в покупки не попадёт')
           }}
           onFreeText={(text) => {
             saveEntry({ date: picking, meal: pickMeal, status: 'planned', title: text })

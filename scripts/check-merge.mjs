@@ -90,7 +90,12 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
 {
   const db = normalizeDatabase({
     recipes: { r1: { name: 'Тест' }, r2: { ingredients: 'мусор' } },
-    entries: { e1: { meal: 'dinner' }, e2: { date: '2026-08-10', status: 'weird' } },
+    entries: {
+      e1: { meal: 'dinner' },
+      e2: { date: '2026-08-10', status: 'weird' },
+      e5: { date: '2026-08-10', meal: 'dinner', leftovers: true },
+      e6: { date: '2026-08-10', meal: 'dinner', leftovers: 'мусор' },
+    },
     settings: { userEmails: { sasha: 's@x.ru' } },
     settingsUpdatedAt: '2026-08-01T00:00:00.000Z',
   })
@@ -98,6 +103,8 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   check('рецепту без tags дали пустой список', Array.isArray(db.recipes.r1?.tags))
   check('запись без даты отброшена', db.entries.e1 === undefined)
   check('кривой статус приведён к done', db.entries.e2?.status === 'done')
+  check('флажок «доедаем» пережил санитайзер', db.entries.e5?.leftovers === true)
+  check('мусор вместо флажка отброшен', db.entries.e6?.leftovers === undefined)
   check('рецепт без имени отброшен', db.recipes.r2 === undefined)
   check('старой привязке проставлена давность', db.settings.userEmailsAt.sasha === '2026-08-01T00:00:00.000Z')
 }

@@ -54,6 +54,7 @@ export function EntryRow({ entry, onEdit }: { entry: Entry; onEdit: () => void }
           </div>
           <div className="meta">
             {meal && <span>{meal}</span>}
+            {entry.leftovers && <span>доедаем</span>}
             {entry.servings ? <span>{entry.servings} порц.</span> : null}
             {entry.cost != null && <span>{formatMoney(entry.cost, db.settings.currency)}</span>}
           </div>
