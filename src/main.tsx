@@ -5,7 +5,11 @@ import { HashRouter } from 'react-router-dom'
 import { App } from './App'
 import { StoreProvider } from './lib/store'
 import { registerServiceWorker } from './lib/updates'
+import { watchInstallPrompt } from './lib/install'
 import './styles.css'
+
+// Событие готовности к установке прилетает рано — слушаем до отрисовки.
+watchInstallPrompt()
 
 /*
  * Страницу нельзя показывать в чужом фрейме: заголовок frame-ancestors на

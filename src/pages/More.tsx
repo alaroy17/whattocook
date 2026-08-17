@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { useStore } from '../lib/store'
 import { alive, isPurged } from '../lib/db'
+import { canPrompt, isIos, isStandalone, promptInstall, subscribeInstall } from '../lib/install'
 import {
   IconChart,
   IconChevronRight,
   IconClock,
   IconCloud,
+  IconPhone,
   IconRefresh,
   IconSettings,
   IconTag,
@@ -44,6 +46,15 @@ export function More() {
   const { db, me, setMe, sync, identityLocked } = useStore()
   const [confirmSwap, setConfirmSwap] = useState(false)
   const partner = USERS.find((user) => user.id !== me)
+
+  /*
+   * Установка на телефон. Chrome сообщает о готовности событием — тогда
+   * открываем системное окно сами. На iPhone такого события нет вовсе,
+   * там установка только через «Поделиться», поэтому просто подсказываем.
+   */
+  const [installable, setInstallable] = useState(canPrompt)
+  useEffect(() => subscribeInstall(() => setInstallable(canPrompt())), [])
+  const showInstall = !isStandalone() && (installable || isIos())
 
   // Как в статистике: «доедаем» отдельной готовкой не считается.
   const entries = alive(db.entries).filter(
@@ -151,6 +162,24 @@ export function More() {
             title="Настройки"
             onClick={() => navigate('/more/settings')}
           />
+          {/*
+            Кнопку установки браузер прячет в своё меню, и найти её удаётся
+            не всем. Показываем, пока приложение открыто во вкладке.
+          */}
+          {showInstall && (
+            <MenuRow
+              icon={<IconPhone size={19} />}
+              title="Установить на телефон"
+              hint={installable ? 'иконка на экране, работает без сети' : 'через «Поделиться»'}
+              onClick={() => {
+                if (installable) {
+                  void promptInstall()
+                  return
+                }
+                toast('Поделиться → На экран «Домой»')
+              }}
+            />
+          )}
         </div>
 
         <div className="small muted" style={{ textAlign: 'center', marginTop: 22 }}>

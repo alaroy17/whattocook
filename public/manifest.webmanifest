@@ -3,6 +3,7 @@
   "short_name": "Что готовим",
   "description": "Домашний дневник еды: рецепты, история, планировщик и список покупок",
   "lang": "ru",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -27,6 +27,14 @@ export const IconHome = (p: IconProps) => (
   </Base>
 )
 
+export const IconPhone = (p: IconProps) => (
+  <Base {...p}>
+    <rect x="6.5" y="2.5" width="11" height="19" rx="2.5" />
+    <path d="M10.5 5.5h3" />
+    <path d="M12 18.2v.01" />
+  </Base>
+)
+
 export const IconBook = (p: IconProps) => (
   <Base {...p}>
     <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z" />
