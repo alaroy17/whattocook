@@ -81,13 +81,20 @@ const ME_KEY = 'wtc.me'
 
 function stamp<T extends Syncable>(existing: T | undefined, patch: Partial<T>, id: string): T {
   const time = nowIso()
-  return {
+  const result = {
     ...(existing ?? ({} as T)),
     ...patch,
     id,
     createdAt: existing?.createdAt ?? time,
     updatedAt: time,
   } as T
+  /*
+   * Пользовательское сохранение — всегда про живую запись. Пока форма была открыта,
+   * синхронизация могла привезти надгробие этой же записи; без снятия deletedAt
+   * «Сохранить» закрывал шторку, а правка молча оставалась удалённой.
+   */
+  delete result.deletedAt
+  return result
 }
 
 /**
@@ -101,7 +108,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const loaded = loadLocal() ?? emptyDatabase()
     // Базы, собранные до единой сущности продуктов, догоняют: ингредиенты → каталог.
     // Заодно вычищается выдуманная сидом история приготовлений.
-    const prepared = materializeIngredientProducts(removeSeedArtifacts(loaded, nowIso()), nowIso())
+    const prepared = materializeIngredientProducts(removeSeedArtifacts(loaded), nowIso())
     if (prepared !== loaded) saveLocal(prepared)
     return prepared
   })
@@ -167,19 +174,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
          * файл кто-то ещё (поле version растёт при каждой записи): если записал —
          * начинаем заново, иначе его правки были бы затёрты нашей версией.
          */
-        let merged = pruneTombstones(dbRef.current)
+        /*
+         * Весь пайплайн живёт в «нормализованном пространстве»: результат прогоняется
+         * через serialize → normalizeDatabase. Записи, созданные на устройстве, не несут
+         * ключей, которые санитайзер добавляет при скачивании (ratings/cost/servings у
+         * записей, packQty/packPrice у продуктов), — без нормализации сравнение
+         * «есть ли изменения» не сходилось никогда, и телефон перезаливал байт-в-байт
+         * тот же файл каждые 90 секунд до перезапуска приложения.
+         */
+        const settle = (database: Database): Database =>
+          normalizeDatabase(JSON.parse(serialize(database)) as unknown)
+        let merged = settle(pruneTombstones(dbRef.current))
         let baseline = file.version
         for (let attempt = 0; attempt < 3; attempt++) {
           const remote = normalizeDatabase(await drive.downloadJson(file.id))
           // Локальную версию берём заново: пока шёл запрос, пользователь мог что-то поменять.
           const now = nowIso()
-          merged = pruneTombstones(
-            dedupeProducts(
-              materializeIngredientProducts(
-                dedupeQuickEntries(removeSeedArtifacts(mergeDatabases(dbRef.current, remote), now), now),
+          merged = settle(
+            pruneTombstones(
+              dedupeProducts(
+                materializeIngredientProducts(
+                  dedupeQuickEntries(removeSeedArtifacts(mergeDatabases(dbRef.current, remote)), now),
+                  now,
+                ),
                 now,
               ),
-              now,
             ),
           )
           const mergedText = serialize(merged)
@@ -194,9 +213,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           break
         }
 
-        // И ещё раз: правка могла прийти уже во время загрузки — тогда доотправим следующим заходом.
-        const changedDuringUpload = serialize(dbRef.current) !== serialize(merged)
-        applyDb(changedDuringUpload ? mergeDatabases(dbRef.current, merged) : merged)
+        /*
+         * Правка могла прийти во время загрузки — тогда доотправим следующим заходом.
+         * Сравниваем в одном пространстве с merged: раньше здесь сравнивался сырой
+         * dbRef, и любое надгробие, выброшенное пайплайном, выглядело как «правка» —
+         * applyDb возвращал его в базу, планировался новый синк, и так бесконечно.
+         */
+        const settled = settle(pruneTombstones(mergeDatabases(dbRef.current, merged)))
+        const changedDuringUpload = serialize(settled) !== serialize(merged)
+        applyDb(changedDuringUpload ? settled : merged)
         if (changedDuringUpload) schedulePushRef.current()
         const at = nowIso()
         localStorage.setItem('wtc.lastSyncAt', at)
@@ -511,13 +536,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           for (const name of names) {
             const target = draft[name] as Record<string, Syncable>
             for (const [id, item] of Object.entries(target)) {
-              if (item.deletedAt) {
-                if (item.deletedAt > latestSeen) latestSeen = item.deletedAt
-                delete target[id]
+              if (!item.deletedAt) continue
+              if (item.deletedAt > latestSeen) latestSeen = item.deletedAt
+              /*
+               * Записи дневника, ссылающиеся на стираемый рецепт, получают его имя
+               * в title — иначе после очистки история показывала бы «Без названия».
+               */
+              if (name === 'recipes') {
+                const recipeName = (item as Recipe).name
+                for (const [entryId, entry] of Object.entries(draft.entries)) {
+                  if (entry.recipeId === id && !entry.title && recipeName) {
+                    draft.entries[entryId] = { ...entry, title: recipeName, updatedAt: nowIso() }
+                  }
+                }
               }
+              delete target[id]
             }
           }
           if (latestSeen) {
+            // Спешащие часы одного устройства не должны запирать удаления в будущем.
+            const now = nowIso()
+            if (latestSeen > now) latestSeen = now
             const current = draft.settings.purgedAt
             draft.settings = {
               ...draft.settings,

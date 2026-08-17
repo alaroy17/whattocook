@@ -9,6 +9,7 @@ import {
   materializeIngredientProducts,
   dedupeProducts,
 } from '../.check/db.mjs'
+import { removeSeedArtifacts } from '../.check/seed.mjs'
 
 let failed = 0
 const check = (name, condition) => {
@@ -269,7 +270,99 @@ const stamp = (id, updatedAt, extra = {}) => ({ id, createdAt: updatedAt, update
   check('продукт без дублей не тронут', aliveOnes.some((p) => p.name === 'Перец'))
 }
 
-// 10. Строки с диапазоном и запятой-пометкой (через полный normalizeDatabase не проверить —
+// 10. Очистка корзины не воскрешает удаление, сделанное офлайн ДО неё.
+{
+  const cleaned = base()
+  cleaned.settings.purgedAt = '2026-08-16T11:00:00.000Z'
+  cleaned.settingsUpdatedAt = '2026-08-16T11:00:00.000Z'
+  cleaned.recipes.r9 = stamp('r9', '2026-08-10T09:00:00.000Z', { name: 'Плов' })
+
+  // Второй телефон удалил то же блюдо офлайн раньше очистки — очищавший этого не видел.
+  const offline = base()
+  offline.recipes.r9 = stamp('r9', '2026-08-16T10:00:00.000Z', {
+    name: 'Плов',
+    deletedAt: '2026-08-16T10:00:00.000Z',
+  })
+
+  const m1 = pruneTombstones(mergeDatabases(cleaned, offline))
+  const m2 = pruneTombstones(mergeDatabases(offline, cleaned))
+  check('офлайн-удаление переживает чужую очистку', m1.recipes.r9?.deletedAt !== undefined)
+  check('и не зависит от порядка сторон', m2.recipes.r9?.deletedAt !== undefined)
+}
+
+// 11. Ничья по updatedAt разрешается одинаково с обеих сторон — иначе вечная перезаливка.
+{
+  const a = base()
+  a.recipes.r10 = stamp('r10', '2026-08-16T10:00:00.000Z', { name: 'Первый' })
+  const b = base()
+  b.recipes.r10 = stamp('r10', '2026-08-16T10:00:00.000Z', { name: 'Второй' })
+  check(
+    'ничья по времени разрешается детерминированно',
+    mergeDatabases(a, b).recipes.r10.name === mergeDatabases(b, a).recipes.r10.name,
+  )
+  const s1 = base()
+  s1.settings.sharedWith = ['b@x.ru', 'a@x.ru']
+  const s2 = base()
+  s2.settings.sharedWith = ['a@x.ru', 'b@x.ru']
+  check(
+    'список доступа сходится по порядку',
+    serialize(mergeDatabases(s1, s2)) === serialize(mergeDatabases(s2, s1)),
+  )
+}
+
+// 12. Флажок «доедаем» переезжает на выжившего, «кто готовил» не считается голым.
+{
+  const at = '2026-08-17T12:00:00.000Z'
+  const db = normalizeDatabase({
+    entries: {
+      e1: { date: '2026-08-17', meal: 'dinner', status: 'planned', recipeId: 'r1', createdAt: at, updatedAt: at },
+      e2: { date: '2026-08-17', meal: 'dinner', status: 'planned', recipeId: 'r1', leftovers: true, createdAt: at, updatedAt: at },
+      e3: { date: '2026-08-17', meal: 'lunch', status: 'done', recipeId: 'r2', cook: 'sasha', createdAt: at, updatedAt: at },
+      e4: { date: '2026-08-17', meal: 'lunch', status: 'done', recipeId: 'r2', createdAt: at, updatedAt: at },
+    },
+  })
+  const deduped = dedupeQuickEntries(db, '2026-08-17T13:00:00.000Z')
+  const aliveOnes = Object.values(deduped.entries).filter((e) => !e.deletedAt)
+  const r1 = aliveOnes.filter((e) => e.recipeId === 'r1')
+  check('дубль схлопнут, «доедаем» сохранился', r1.length === 1 && r1[0]?.leftovers === true)
+  check('запись с «кто готовил» не схлопнута', aliveOnes.filter((e) => e.recipeId === 'r2').length === 2)
+}
+
+// 13. Вычистка сида бьёт по отпечатку, а не по имени: настоящая запись задним числом цела.
+{
+  const seedTime = '2026-05-01T10:00:00.000Z'
+  const db = normalizeDatabase({
+    recipes: {
+      r1: { name: 'Борщ', category: 'Суп', ratings: { sasha: 5, andrei: 4 }, favorite: true, createdAt: seedTime, updatedAt: seedTime },
+    },
+    entries: {
+      // Выдуманная сидом: создана тем же мгновением, что и рецепт.
+      fake: { date: '2026-04-01', meal: 'lunch', status: 'done', recipeId: 'r1', createdAt: seedTime, updatedAt: seedTime },
+      // Настоящая: «в прошлую среду был борщ», записана пользователем позже.
+      real: { date: '2026-08-10', meal: 'lunch', status: 'done', recipeId: 'r1', createdAt: '2026-08-17T09:00:00.000Z', updatedAt: '2026-08-17T09:00:00.000Z' },
+    },
+  })
+  const cleaned = removeSeedArtifacts(db)
+  check('выдуманная запись получила надгробие', cleaned.entries.fake?.deletedAt !== undefined)
+  check('надгробие датировано временем сида', (cleaned.entries.fake?.deletedAt ?? '') < '2026-05-01T10:00:01.000Z')
+  check('настоящая запись задним числом цела', cleaned.entries.real?.deletedAt === undefined)
+  check('оценки сида сняты', Object.keys(cleaned.recipes.r1?.ratings ?? {}).length === 0)
+  check('повторный прогон ничего не меняет', removeSeedArtifacts(cleaned) === cleaned)
+}
+
+// 14. Настоящие оценки пользователя вычистка не трогает, даже у пример-рецепта.
+{
+  const time = '2026-05-01T10:00:00.000Z'
+  const db = normalizeDatabase({
+    recipes: {
+      r1: { name: 'Борщ', category: 'Суп', ratings: { sasha: 3 }, createdAt: time, updatedAt: time },
+    },
+  })
+  const cleaned = removeSeedArtifacts(db)
+  check('чужая оценка не снята', cleaned.recipes.r1?.ratings?.sasha === 3)
+}
+
+// 15. Строки с диапазоном и запятой-пометкой (через полный normalizeDatabase не проверить —
 // это parseIngredientLine, он гоняется в check-ingredients).
 
 process.exit(failed === 0 ? 0 : 1)

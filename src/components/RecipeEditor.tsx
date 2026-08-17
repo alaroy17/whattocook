@@ -94,8 +94,17 @@ export function RecipeEditor({
     if (!file) return
     setUploading(true)
     try {
-      // Старый файл не трогаем: правку ещё могут отменить, и фото исчезло бы зря.
-      const uploaded = await uploadRecipePhoto(file, undefined, recipe?.id)
+      /*
+       * Исходное фото не трогаем: правку ещё могут отменить, и оно исчезло бы зря.
+       * А промежуточный снимок (уже заменённый в этой же форме) выбрасываем —
+       * иначе он оставался в очереди офлайн-загрузки и позже прилипал к рецепту
+       * поверх выбранного, затирая правку у обоих.
+       */
+      const uploaded = await uploadRecipePhoto(
+        file,
+        photoId && photoId !== initialPhotoId ? photoId : undefined,
+        recipe?.id,
+      )
       setPhotoId(uploaded)
       if (isPendingPhoto(uploaded)) toast('Фото сохранится на Диск, когда появится сеть')
     } catch (error) {
@@ -352,7 +361,14 @@ export function RecipeEditor({
               />
             </label>
             {photoId && (
-              <button className="btn btn-sm btn-ghost" onClick={() => setPhotoId(undefined)}>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => {
+                  // Только что загруженное убираем и с Диска (и из офлайн-очереди).
+                  if (photoId && photoId !== initialPhotoId) void discardPhoto(photoId)
+                  setPhotoId(undefined)
+                }}
+              >
                 Убрать
               </button>
             )}

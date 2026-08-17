@@ -176,7 +176,12 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
 
   const qty = Number(packQty.replace(',', '.'))
   const total = Number(packPrice.replace(',', '.'))
-  const unitPrice = qty > 0 && total > 0 ? total / qty : product?.price ?? null
+  /*
+   * Цену держим только пока поля упаковки заполнены: раньше при очистке полей
+   * подставлялась прежняя цена, и стереть её из интерфейса было невозможно.
+   */
+  const unitPrice = qty > 0 && total > 0 ? total / qty : null
+  const needsQty = total > 0 && !(qty > 0)
 
   const existingId = product?.id || undefined
 
@@ -261,6 +266,9 @@ function ProductEditor({ product, onClose }: { product?: Product; onClose: () =>
             </div>
           </div>
 
+          {needsQty && (
+            <div className="small muted">Укажите объём упаковки, иначе цену не посчитать</div>
+          )}
           {unitPrice != null && (
             <div className="small muted">
               Получается {formatMoney(unitPrice * (unit === 'г' || unit === 'мл' ? 1000 : 1), db.settings.currency)} за{' '}

@@ -393,7 +393,11 @@ export function RecipeDetail() {
               <div className="shop-item" key={entry.id} style={{ cursor: 'default' }}>
                 <span className="grow">
                   {formatDate(entry.date, { year: true })}
-                  <span className="small muted"> · {MEAL_SLOTS.find((m) => m.id === entry.meal)?.name}</span>
+                  <span className="small muted">
+                    {' '}
+                    · {MEAL_SLOTS.find((m) => m.id === entry.meal)?.name}
+                    {entry.leftovers ? ' · доедаем' : ''}
+                  </span>
                   {entry.note && <div className="small muted">{entry.note}</div>}
                 </span>
                 {entry.cook && <Avatar id={entry.cook} />}
@@ -412,7 +416,7 @@ export function RecipeDetail() {
       {editing && <RecipeEditor recipe={recipe} onClose={() => setEditing(false)} />}
       {planning && (
         <EntryEditor
-          defaults={{ date: today(), meal: 'dinner', status: 'planned', recipeId: recipe.id }}
+          defaults={{ date: today(), meal: guessMeal(recipe.category), status: 'planned', recipeId: recipe.id }}
           onClose={() => setPlanning(false)}
         />
       )}

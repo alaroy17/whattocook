@@ -115,12 +115,21 @@ export function CalendarPage() {
   }
   const onPointerUp = (event: React.PointerEvent) => {
     const start = swipeStart.current
-    swipeStart.current = null
+    // Чужой палец (второе касание) не должен обнулять начатый жест.
     if (!start || event.pointerId !== start.id) return
+    swipeStart.current = null
     const dx = event.clientX - start.x
     const dy = event.clientY - start.y
     if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.5) return
     suppressClick.current = true
+    /*
+     * На телефоне click после свайпа не приходит вовсе, и взведённый флаг
+     * съедал бы следующее нажатие с клавиатуры или скринридера. Настоящий
+     * click, если он есть, успевает раньше нулевого таймера.
+     */
+    setTimeout(() => {
+      suppressClick.current = false
+    }, 0)
     setMonth(addMonths(month, dx < 0 ? 1 : -1))
   }
   const onClickCapture = (event: React.MouseEvent) => {

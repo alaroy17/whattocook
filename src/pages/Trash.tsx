@@ -89,7 +89,13 @@ export function Trash() {
             for (const recipe of Object.values(db.recipes)) {
               if (recipe.deletedAt && recipe.photoId) void discardPhoto(recipe.photoId)
             }
-            purge()
+            /*
+             * Чистим только то, что корзина показывает, — рецепты. Скрытые надгробия
+             * записей и продуктов живут для синхронизации: их стирание воскрешало
+             * удалённые продукты (материализация пересоздавала имя) и двигало
+             * водяной знак очистки в «сегодня».
+             */
+            purge('recipes')
             setConfirmPurge(false)
             toast('Корзина очищена')
           }}

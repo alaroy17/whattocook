@@ -1,6 +1,14 @@
 import type { Database, Product, Recipe, RecipeIngredient } from '../types'
-import { addDays } from './date'
-import { normalizeName, nowIso, uid } from './util'
+import { normalizeName, nowIso } from './util'
+
+/**
+ * Id примеров детерминированные: «Добавить примеры» на двух устройствах
+ * до первой синхронизации давало 17 пар дублей со случайными id — слияние
+ * честно сохраняло оба набора. Одинаковые id схлопываются сами по LWW.
+ */
+function seedId(prefix: string, name: string): string {
+  return `seed-${prefix}-${normalizeName(name).replace(/[^a-zа-яё0-9]+/gi, '-')}`
+}
 
 type SeedRecipe = {
   name: string
@@ -422,7 +430,7 @@ export function buildSeedDatabase(base: Database): Database {
 
   for (const [name, group, unit, packQty, packPrice] of PRODUCTS) {
     if (existingProducts.has(normalizeName(name))) continue
-    const id = uid('p')
+    const id = seedId('p', name)
     const product: Product = {
       id,
       name,
@@ -440,7 +448,7 @@ export function buildSeedDatabase(base: Database): Database {
 
   for (const item of RECIPES) {
     if (existingRecipes.has(normalizeName(item.name))) continue
-    const id = uid('r')
+    const id = seedId('r', item.name)
     const ingredients: RecipeIngredient[] = item.ingredients.map(([name, qty, unit]) => ({ name, qty, unit }))
     const recipe: Recipe = {
       id,
@@ -472,44 +480,68 @@ export function buildSeedDatabase(base: Database): Database {
   return next
 }
 
+function plusMs(iso: string, ms: number): string {
+  return new Date(new Date(iso).getTime() + ms).toISOString()
+}
+
 /**
  * Прежние версии примеров вместе с рецептами придумывали историю приготовлений
  * в прошлом и оценки — чтобы подсказки было на чём показать. Пользователям такая
  * самодеятельность не нужна: календарь и оценки принадлежат им.
  *
- * Выдуманная запись узнаётся по связке признаков: пример-рецепт + «голая» запись
- * (без заметок, стоимости и оценок) + дата на три и больше дней раньше момента
- * создания. Руками так не пишут: настоящие записи создаются в свой день или на
- * днях. Вычистка идёт надгробиями, чтобы доехать и до второго устройства.
+ * Выдуманная запись узнаётся по отпечатку старого сида: рецепт и вся его история
+ * создавались одним значением времени, поэтому `entry.createdAt === recipe.createdAt`
+ * с точностью до миллисекунды. Настоящая запись так совпасть не может — она
+ * создаётся отдельным действием позже рецепта. Прежний матч по имени удалён:
+ * он убивал настоящие записи задним числом («в среду был борщ») и не переживал
+ * переименования примеров.
+ *
+ * Надгробия и сброс оценок датируются `createdAt + 1мс`, а не «сейчас»:
+ * свежая метка ломала водяной знак очистки корзины (purgedAt прыгал в сегодня
+ * и стирал чужие офлайн-удаления) и перебивала по LWW настоящие правки
+ * с отставшего устройства. Слишком свежие надгробия ранних версий вычистки
+ * перештамповываются назад — детерминированно, обе стороны сходятся.
  */
-export function removeSeedArtifacts(db: Database, at: string): Database {
-  const seedNames = new Set(RECIPES.map((item) => normalizeName(item.name)))
+export function removeSeedArtifacts(db: Database): Database {
   let changed = false
 
   const entries = { ...db.entries }
   for (const [id, entry] of Object.entries(db.entries)) {
-    if (entry.deletedAt || !entry.recipeId || entry.status !== 'done') continue
+    if (!entry.recipeId || entry.status !== 'done') continue
     const recipe = db.recipes[entry.recipeId]
-    if (!recipe || !seedNames.has(normalizeName(recipe.name))) continue
+    if (!recipe || entry.createdAt !== recipe.createdAt) continue
     const bare =
       !entry.note &&
       entry.cost == null &&
       entry.servings == null &&
       Object.keys(entry.ratings ?? {}).length === 0
     if (!bare) continue
-    if (entry.date >= addDays(entry.createdAt.slice(0, 10), -2)) continue
-    entries[id] = { ...entry, deletedAt: at, updatedAt: at }
+    if (entry.date >= entry.createdAt.slice(0, 10)) continue
+    const stamp = plusMs(entry.createdAt, 1)
+    if (entry.deletedAt && entry.deletedAt <= stamp) continue
+    entries[id] = { ...entry, deletedAt: stamp, updatedAt: stamp }
     changed = true
   }
 
-  // Оценки и «избранное», выданные сидом, снимаются — но только у нетронутых
-  // рецептов: любая правка пользователя сдвигает updatedAt, и мы её не трогаем.
+  /*
+   * Оценки и «избранное», выданные сидом, снимаются только у нетронутых рецептов
+   * (любая правка сдвигает updatedAt) и только когда оценки совпадают с формулой
+   * старого сида — иначе настоящие оценки из импортированного бэкапа без
+   * updatedAt попадали бы под раздачу.
+   */
+  const seedNames = new Set(RECIPES.map((item) => normalizeName(item.name)))
   const recipes = { ...db.recipes }
   for (const [id, recipe] of Object.entries(db.recipes)) {
     if (recipe.deletedAt || !seedNames.has(normalizeName(recipe.name))) continue
     if (recipe.updatedAt !== recipe.createdAt) continue
-    if (Object.keys(recipe.ratings ?? {}).length === 0 && !recipe.favorite) continue
-    recipes[id] = { ...recipe, ratings: {}, favorite: false, updatedAt: at }
+    const ratings = recipe.ratings ?? {}
+    const seedPattern =
+      Object.keys(ratings).length === 2 &&
+      ratings.andrei === 4 &&
+      (ratings.sasha === 4 || ratings.sasha === 5)
+    if (!seedPattern) continue
+    const stamp = plusMs(recipe.createdAt, 1)
+    recipes[id] = { ...recipe, ratings: {}, favorite: false, updatedAt: stamp }
     changed = true
   }
 

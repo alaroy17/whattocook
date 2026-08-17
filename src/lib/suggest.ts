@@ -189,8 +189,15 @@ export function pickRandom(suggestions: Suggestion[], fair = false): Suggestion 
  */
 export function guessMeal(category: string | undefined, at: Date = new Date()): MealSlot {
   if (category === 'Завтрак') return 'breakfast'
-  if (category === 'Суп') return 'lunch'
-  if (category === 'Десерт' || category === 'Выпечка' || category === 'Закуска') return 'snack'
+  if (category === 'Суп' || category === 'Обед') return 'lunch'
+  if (
+    category === 'Десерт' ||
+    category === 'Выпечка' ||
+    category === 'Закуска' ||
+    category === 'Перекус' ||
+    category === 'Напиток'
+  )
+    return 'snack'
   if (category !== undefined) return 'dinner'
   const hour = at.getHours()
   if (hour < 11) return 'breakfast'

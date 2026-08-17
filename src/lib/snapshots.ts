@@ -2,6 +2,7 @@ import type { Database, Syncable } from '../types'
 import { alive, normalizeDatabase, serialize } from './db'
 import { today } from './date'
 import * as drive from './drive'
+import { removeSeedArtifacts } from './seed'
 import { nowIso } from './util'
 
 /** Сколько ежедневных копий держим на Диске. */
@@ -83,7 +84,9 @@ export interface RestoreResult {
  */
 export async function restoreSnapshot(snapshotId: string, current: Database): Promise<RestoreResult> {
   const raw = await drive.downloadJson(snapshotId)
-  const snapshot = normalizeDatabase(raw)
+  // Старые копии несут выдуманную сидом историю и оценки — вычищаем ДО наложения:
+  // внутри копии отпечаток сида ещё цел, а после восстановления он бы потерялся.
+  const snapshot = removeSeedArtifacts(normalizeDatabase(raw))
   const at = nowIso()
 
   const result: Database = {

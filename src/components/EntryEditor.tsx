@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MEAL_SLOTS, USERS, type Cook, type Entry, type MealSlot, type Recipe } from '../types'
 import { useStore } from '../lib/store'
@@ -6,6 +6,7 @@ import { Avatar, Confirm, Field, Segmented, Sheet, Stars, UserPicker, toast } fr
 import { RecipePicker } from './RecipePicker'
 import { buildProductIndex, recipeCost, servingsMultiplier } from '../lib/cost'
 import { alive } from '../lib/db'
+import { isLikelyLeftovers } from '../lib/entries'
 import { IconTrash } from './Icons'
 
 export function EntryEditor({
@@ -30,9 +31,27 @@ export function EntryEditor({
   const [ratings, setRatings] = useState(initial.ratings ?? {})
   const [cost, setCost] = useState(initial.cost != null ? String(initial.cost) : '')
   const [servings, setServings] = useState(initial.servings != null ? String(initial.servings) : '')
-  const [leftovers, setLeftovers] = useState(Boolean(initial.leftovers))
+  /*
+   * «Доедаем» для новой записи угадывается так же, как в кнопках быстрого
+   * добавления, — иначе одно и то же действие через форму давало другой
+   * результат в списке покупок. Пересчёт при смене даты и блюда, пока
+   * пользователь не тронул тумблер руками.
+   */
+  const [leftovers, setLeftovers] = useState(() => {
+    if (entry) return Boolean(entry.leftovers)
+    if (initial.leftovers != null) return Boolean(initial.leftovers)
+    if (initial.recipeId && initial.date) return isLikelyLeftovers(db, initial.date, initial.recipeId)
+    return false
+  })
+  const leftoversTouched = useRef(false)
   const [picking, setPicking] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  /** Пересчёт авто-флага при смене даты или блюда — пока тумблер не трогали руками. */
+  const syncAuto = (nextDate: string, nextRecipe: string | undefined) => {
+    if (entry || leftoversTouched.current) return
+    setLeftovers(Boolean(nextRecipe && nextDate && isLikelyLeftovers(db, nextDate, nextRecipe)))
+  }
 
   const recipe: Recipe | undefined = recipeId ? db.recipes[recipeId] : undefined
   const index = buildProductIndex(alive(db.products))
@@ -90,7 +109,10 @@ export function EntryEditor({
                   className="input"
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => {
+                    setDate(e.target.value)
+                    syncAuto(e.target.value, recipeId)
+                  }}
                 />
               </Field>
             </div>
@@ -129,7 +151,8 @@ export function EntryEditor({
             </button>
             {(recipe || title) && (
               <div className="row" style={{ gap: 4 }}>
-                {recipe && (
+                {/* Удалённый рецепт открывать некуда — там пустая страница «не найдено» */}
+                {recipe && !recipe.deletedAt && (
                   <button
                     className="btn btn-sm btn-ghost"
                     onClick={() => {
@@ -145,6 +168,7 @@ export function EntryEditor({
                   onClick={() => {
                     setRecipeId(undefined)
                     setTitle('')
+                    setLeftovers(false)
                   }}
                 >
                   Очистить
@@ -159,7 +183,10 @@ export function EntryEditor({
               <input
                 type="checkbox"
                 checked={leftovers}
-                onChange={(event) => setLeftovers(event.target.checked)}
+                onChange={(event) => {
+                  leftoversTouched.current = true
+                  setLeftovers(event.target.checked)
+                }}
               />
             </label>
           )}
@@ -247,10 +274,12 @@ export function EntryEditor({
           onPick={(picked) => {
             setRecipeId(picked.id)
             setTitle('')
+            syncAuto(date, picked.id)
           }}
           onFreeText={(text) => {
             setRecipeId(undefined)
             setTitle(text)
+            setLeftovers(false)
           }}
         />
       )}

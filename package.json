@@ -10,7 +10,7 @@
     "build": "npm run icons && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "check:merge": "esbuild src/lib/db.ts --bundle --format=esm --outfile=.check/db.mjs --log-level=error && node scripts/check-merge.mjs",
+    "check:merge": "esbuild src/lib/db.ts --bundle --format=esm --outfile=.check/db.mjs --log-level=error && esbuild src/lib/seed.ts --bundle --format=esm --outfile=.check/seed.mjs --log-level=error && node scripts/check-merge.mjs",
     "check:ingredients": "esbuild src/lib/ingredientText.ts --bundle --format=esm --outfile=.check/ingredientText.mjs --log-level=error && node scripts/check-ingredients.mjs",
     "check": "npm run check:merge && npm run check:ingredients"
   },

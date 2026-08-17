@@ -202,6 +202,8 @@ export function normalizeDatabase(input: unknown): Database {
  */
 export function mergeDatabases(a: Database, b: Database): Database {
   const result = emptyDatabase()
+  // Водяной знак очистки нужен уже при слиянии записей — считаем заранее.
+  const purged = maxIso(a.settings.purgedAt, b.settings.purgedAt)
   for (const name of COLLECTIONS) {
     const target = result[name] as Record<string, Syncable>
     const left = a[name] as Record<string, Syncable>
@@ -209,9 +211,25 @@ export function mergeDatabases(a: Database, b: Database): Database {
     for (const id of new Set([...Object.keys(left), ...Object.keys(right)])) {
       const x = left[id]
       const y = right[id]
-      if (!x) target[id] = y
-      else if (!y) target[id] = x
-      else target[id] = y.updatedAt > x.updatedAt ? y : x
+      let winner: Syncable
+      if (!x) winner = y
+      else if (!y) winner = x
+      else if (y.updatedAt !== x.updatedAt) winner = y.updatedAt > x.updatedAt ? y : x
+      // Ничья по времени: без детерминированного выбора каждая сторона оставляла
+      // бы свою версию, и файл перезаливался бы по кругу бесконечно.
+      else winner = JSON.stringify(sortKeys(x)) <= JSON.stringify(sortKeys(y)) ? x : y
+
+      /*
+       * Надгробие, попавшее под очистку корзины, выбрасывается только когда вторая
+       * сторона запись тоже не считает живой. Если жива — надгробие обязано пережить
+       * слияние: иначе офлайн-удаление, сделанное ДО чужой очистки, проигрывало бы
+       * ей, живая копия возвращалась, и блюдо воскресало у обоих.
+       */
+      if (winner.deletedAt && purged != null && winner.deletedAt <= purged) {
+        const other = winner === x ? y : x
+        if (!other || other.deletedAt) continue
+      }
+      target[id] = winner
     }
   }
   const settingsFromB = b.settingsUpdatedAt > a.settingsUpdatedAt
@@ -226,9 +244,11 @@ export function mergeDatabases(a: Database, b: Database): Database {
   const bindings = mergeUserBindings(a.settings, b.settings)
   result.settings.userEmails = bindings.emails
   result.settings.userEmailsAt = bindings.at
+  // Сортировка обязательна: объединение в порядке вставки давало разный порядок
+  // на двух устройствах — и вечный встречный обмен «изменившимся» файлом.
   result.settings.sharedWith = [
     ...new Set([...(a.settings.sharedWith ?? []), ...(b.settings.sharedWith ?? [])]),
-  ]
+  ].sort()
   result.settings.purgedAt = maxIso(a.settings.purgedAt, b.settings.purgedAt)
 
   return result
@@ -293,6 +313,7 @@ export function dedupeQuickEntries(db: Database, at: string): Database {
     if (entry.deletedAt || !entry.recipeId) continue
     const bare =
       !entry.note &&
+      !entry.cook &&
       entry.cost == null &&
       entry.servings == null &&
       Object.keys(entry.ratings ?? {}).length === 0
@@ -314,6 +335,12 @@ export function dedupeQuickEntries(db: Database, at: string): Database {
     for (const extra of list) {
       if (extra.id === keep.id) continue
       entries[extra.id] = { ...extra, deletedAt: at, updatedAt: at }
+      changed = true
+    }
+    // «Доедаем» с проигравшего дубля переезжает на выжившего — иначе флаг
+    // случайно терялся, и блюдо возвращалось в список покупок и статистику.
+    if (!keep.leftovers && list.some((entry) => entry.leftovers)) {
+      entries[keep.id] = { ...keep, leftovers: true, updatedAt: at }
       changed = true
     }
   }
@@ -385,47 +412,53 @@ export function dedupeProducts(db: Database, at: string): Database {
       return a.id.localeCompare(b.id)
     })[0]
     const merged: Product = { ...keep }
+    let transferred = false
     for (const extra of list) {
       if (extra.id === keep.id) continue
       if (extra.inStock && !merged.inStock) {
         merged.inStock = true
         merged.stockUpdatedAt = extra.stockUpdatedAt ?? merged.stockUpdatedAt
+        transferred = true
       }
       if (merged.price == null && extra.price != null) {
         merged.price = extra.price
         merged.packQty = extra.packQty
         merged.packPrice = extra.packPrice
+        transferred = true
       }
-      if (merged.group === 'Прочее' && extra.group !== 'Прочее') merged.group = extra.group
+      if (merged.group === 'Прочее' && extra.group !== 'Прочее') {
+        merged.group = extra.group
+        transferred = true
+      }
       products[extra.id] = { ...extra, deletedAt: at, updatedAt: at }
       changed = true
     }
-    products[keep.id] = { ...merged, updatedAt: at }
+    // Выживший перештамповывается только когда на него что-то переехало:
+    // лишний бамп updatedAt перебивал бы более свежие правки второй стороны.
+    if (transferred) products[keep.id] = { ...merged, updatedAt: at }
   }
   return changed ? { ...db, products } : db
 }
 
 /**
- * Убирает надгробия: старше срока хранения либо попавшие под ручную очистку корзины.
+ * Убирает надгробия старше срока хранения.
  *
- * Очистка помечается временем в `settings.purgedAt`. Без такой отметки удалённые записи
- * возвращались бы при следующем слиянии — у второго устройства они ещё есть, и оно
- * считало бы их «отсутствующими локально», а не «стёртыми намеренно».
+ * Надгробия, попавшие под ручную очистку корзины (`settings.purgedAt`), выбрасывает
+ * mergeDatabases — там видны обе стороны, и надгробие, которое второй ещё считает
+ * живой записью, переживает слияние и доносит удаление. Здесь, где вторая сторона
+ * не видна, трогать их нельзя: одностороннее выбрасывание воскрешало записи.
  *
  * Возвращает новый объект: базу нельзя менять на месте, на неё смотрит React.
  */
 export function pruneTombstones(db: Database, olderThanDays = TOMBSTONE_DAYS): Database {
   const expired = new Date(Date.now() - olderThanDays * 86400000).toISOString()
-  const purged = db.settings.purgedAt
   const result: Database = { ...db }
   for (const name of COLLECTIONS) {
     const source = db[name] as Record<string, Syncable>
     const kept: Record<string, Syncable> = {}
     let removed = 0
     for (const [id, item] of Object.entries(source)) {
-      const drop =
-        item.deletedAt && (item.deletedAt < expired || (purged != null && item.deletedAt <= purged))
-      if (drop) removed++
+      if (item.deletedAt && item.deletedAt < expired) removed++
       else kept[id] = item
     }
     if (removed > 0) (result[name] as Record<string, Syncable>) = kept

@@ -323,7 +323,13 @@ export function Today() {
 
       {logging && (
         <EntryEditor
-          defaults={{ date, meal: guessMeal(undefined), status: logging.status, recipeId: logging.recipeId }}
+          defaults={{
+            date,
+            // Для блюда приём пищи угадывается по разделу, по часам — только свободная запись.
+            meal: guessMeal(logging.recipeId ? db.recipes[logging.recipeId]?.category : undefined),
+            status: logging.status,
+            recipeId: logging.recipeId,
+          }}
           onClose={() => setLogging(null)}
         />
       )}

@@ -304,7 +304,11 @@ export function SettingsPage() {
                   className="btn grow"
                   onClick={() => {
                     void switchAccount()
-                      .then((email) => toast(email ? `Вошли как ${email}` : 'Аккаунт не изменился'))
+                      .then((email) => {
+                        toast(email ? `Вошли как ${email}` : 'Аккаунт не изменился')
+                        // Папка у нового аккаунта своя — список прав надо перечитать.
+                        return loadAccess()
+                      })
                       .catch((error: unknown) =>
                         toast(error instanceof Error ? error.message : 'Не удалось сменить аккаунт'),
                       )

@@ -614,6 +614,7 @@ export async function shareWith(email: string): Promise<void> {
 }
 
 export interface FolderAccess {
+  /** Почта человека либо описание доступа, если почты нет (ссылка, удалённый аккаунт). */
   email: string
   /** owner — владелец папки, writer — полный доступ к содержимому. */
   role: string
@@ -628,14 +629,27 @@ export interface FolderAccess {
 export async function listFolderAccess(): Promise<FolderAccess[]> {
   const folder = await resolveAppFolder()
   const response = await api(
-    `/drive/v3/files/${encodeURIComponent(folder)}/permissions?fields=permissions(emailAddress,role)`,
+    `/drive/v3/files/${encodeURIComponent(folder)}/permissions?fields=permissions(emailAddress,role,type,domain,deleted)`,
   )
   const data = (await response.json()) as {
-    permissions?: { emailAddress?: string; role?: string }[]
+    permissions?: { emailAddress?: string; role?: string; type?: string; domain?: string; deleted?: boolean }[]
   }
-  return (data.permissions ?? [])
-    .filter((permission) => permission.emailAddress)
-    .map((permission) => ({ email: permission.emailAddress!, role: permission.role ?? '' }))
+  /*
+   * Доступ без почты не прячем: раньше он молча выпадал из списка, и самый
+   * опасный вид — «по ссылке кому угодно» — был на экране невидим.
+   */
+  return (data.permissions ?? []).map((permission) => ({
+    email:
+      permission.emailAddress ||
+      (permission.type === 'anyone'
+        ? 'по ссылке — кто угодно'
+        : permission.type === 'domain'
+          ? `все в ${permission.domain ?? 'домене'}`
+          : permission.deleted
+            ? 'удалённый аккаунт'
+            : 'неизвестный доступ'),
+    role: permission.role ?? '',
+  }))
 }
 
 async function getParents(fileId: string): Promise<string[]> {
